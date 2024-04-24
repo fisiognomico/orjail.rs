@@ -7,10 +7,11 @@ use crate::namespaces::userns;
 use crate::syscalls::setsyscalls;
 
 use nix::unistd::{Pid, close, execve};
-use nix::sched::clone;
+use nix::sched::{unshare, clone};
 use nix::sys::signal::Signal;
 use nix::sched::CloneFlags;
 use std::ffi::CString;
+use std::iter::Cloned;
 
 const STACK_SIZE: usize = 1024 * 1024;
 
@@ -19,11 +20,20 @@ pub fn generate_child_process(config: ContainerOpts) -> Result<Pid, Errcode> {
     // TODO here we perfom a root only action, which one?
     let mut flags = CloneFlags::empty();
     flags.insert(CloneFlags::CLONE_NEWNS);
+    flags.insert(CloneFlags::CLONE_NEWNET);
+    flags.insert(CloneFlags::CLONE_NEWUSER);
     flags.insert(CloneFlags::CLONE_NEWCGROUP);
     flags.insert(CloneFlags::CLONE_NEWPID);
     flags.insert(CloneFlags::CLONE_NEWIPC);
-    flags.insert(CloneFlags::CLONE_NEWNET);
     flags.insert(CloneFlags::CLONE_NEWUTS);
+    match unshare(flags) {
+        Ok(_) => log::info!("Unshared namespace successfully!"),
+        Err(e) => log::info!("Unable to unshare: {:?}", e),
+    }
+
+    flags = CloneFlags::empty();
+    flags.insert(CloneFlags::CLONE_CHILD_SETTID);
+    flags.insert(CloneFlags::CLONE_CHILD_CLEARTID);
     match clone(
         Box::new(|| child(config.clone())),
         &mut tmp_stack,
@@ -62,9 +72,13 @@ fn child(config: ContainerOpts) -> isize {
 
 fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode> {
     set_container_hostname(&config.hostname)?;
-    set_container_mountpoint(&config.mount_dir, &config.addpaths)?;
-    userns(config.fd, config.uid);
+    // TODO at the moment I do not need to change the mount point
+    // as it will be carried out by bubblewrap
+    // set_container_mountpoint(&config.mount_dir, &config.addpaths)?;
+    if let Err(e) = userns(config.fd, config.uid) {
+        log::error!("Error in namespace configuration: {:?}", e);
+    }
     setcapabilities()?;
-    setsyscalls()?;
+    // setsyscalls()?;
     Ok(())
 }
