@@ -12,6 +12,8 @@ pub struct ContainerOpts{
     pub argv:       Vec<CString>,
 
     pub uid:        u32,
+    pub real_uid:   u32,
+    pub real_gid:   u32,
     pub mount_dir:  PathBuf,
     pub fd:         RawFd,
     pub hostname: String,
@@ -19,7 +21,7 @@ pub struct ContainerOpts{
 }
 
 impl ContainerOpts{
-    pub fn new(command: String, uid: u32, mount_dir: PathBuf, addpaths: Vec<(PathBuf, PathBuf)>) -> Result<(ContainerOpts, (RawFd, RawFd)), Errcode> {
+    pub fn new(command: String, uid: u32, real_uid: u32, real_gid: u32, mount_dir: PathBuf, addpaths: Vec<(PathBuf, PathBuf)>) -> Result<(ContainerOpts, (RawFd, RawFd)), Errcode> {
         let argv: Vec<CString> = command.split_ascii_whitespace()
             .map(|s| CString::new(s).expect("Cannot read arg")).collect();
         let path = argv[0].clone();
@@ -32,6 +34,8 @@ impl ContainerOpts{
                     path,
                     argv,
                     uid,
+                    real_uid,
+                    real_gid,
                     mount_dir,
                     fd: sockets.1.clone(),
                     hostname: generate_hostname()?,

@@ -3,13 +3,12 @@ use crate::errors::Errcode;
 use crate::config::ContainerOpts;
 use crate::child::generate_child_process;
 use crate::mountpoint::clean_mounts;
-use crate::namespaces::handle_child_uid_map;
 use crate::resources::clean_cgroups;
 
 use scan_fmt::scan_fmt;
 use nix::sys::utsname::uname;
 use nix::sys::wait::waitpid;
-use nix::unistd::{close, Pid};
+use nix::unistd::{getuid, getgid, close, Pid};
 use std::os::unix::io::RawFd;
 use std::path::PathBuf;
 
@@ -32,9 +31,23 @@ impl Container {
                 .to_path_buf();
             addpaths.push((frompath, mntpath));
         }
+
+        // match default value for uid/gid
+        let real_uid = match args.real_uid {
+            u32::MAX => getuid().as_raw(),
+            _        => args.real_uid,
+        };
+
+        let real_gid = match args.real_gid {
+            u32::MAX => getgid().as_raw(),
+            _        => args.real_uid,
+        };
+
         let (config, sockets) = ContainerOpts::new(
             args.command,
             args.uid,
+            real_uid,
+            real_gid,
             args.mount_dir,
             addpaths)?;
         Ok(Container {

@@ -14,8 +14,16 @@ pub struct Args {
     pub command: String,
 
     /// User ID to create inside the container
-    #[structopt(short, long)]
+    #[structopt(default_value = "0", short = "u", long = "uid")]
     pub uid: u32,
+
+    /// User ID to map inside the container
+    #[structopt(default_value = "4294967295", long = "real-uid")]
+    pub real_uid: u32,
+
+    /// Group ID to map inside the container
+    #[structopt(default_value = "4294967295", long = "real-gid")]
+    pub real_gid: u32,
 
     #[structopt(parse(from_os_str), short = "a", long = "add")]
     pub addpaths: Vec<PathBuf>,

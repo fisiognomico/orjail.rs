@@ -34,6 +34,8 @@ pub fn generate_child_process(config: ContainerOpts) -> Result<Pid, Errcode> {
     flags = CloneFlags::empty();
     flags.insert(CloneFlags::CLONE_CHILD_SETTID);
     flags.insert(CloneFlags::CLONE_CHILD_CLEARTID);
+    // TODO upgade to nix latest and investigate the feasibility of passing
+    // NULL as the child stack.
     match clone(
         Box::new(|| child(config.clone())),
         &mut tmp_stack,
@@ -75,7 +77,7 @@ fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode>
     // TODO at the moment I do not need to change the mount point
     // as it will be carried out by bubblewrap
     // set_container_mountpoint(&config.mount_dir, &config.addpaths)?;
-    if let Err(e) = userns(config.fd, config.uid) {
+    if let Err(e) = userns(config.real_uid, config.real_gid, config.uid) {
         log::error!("Error in namespace configuration: {:?}", e);
     }
     setcapabilities()?;
