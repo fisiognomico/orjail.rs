@@ -2,7 +2,7 @@ use crate::capabilities::setcapabilities;
 use crate::config::ContainerOpts;
 use crate::errors::Errcode;
 use crate::hostname::set_container_hostname;
-use crate::mountpoint::set_container_mountpoint;
+use crate::mountpoint::remount_root;
 use crate::namespaces::userns;
 use crate::syscalls::setsyscalls;
 
@@ -11,7 +11,6 @@ use nix::sched::{unshare, clone};
 use nix::sys::signal::Signal;
 use nix::sched::CloneFlags;
 use std::ffi::CString;
-use std::iter::Cloned;
 
 const STACK_SIZE: usize = 1024 * 1024;
 
@@ -56,7 +55,8 @@ fn child(config: ContainerOpts) -> isize {
         }
     }
 
-    if let Err(e) = close(config.fd) {
+    // TODO clean socket conf
+    if let Err(_) = close(config.fd) {
         log::error!("Error while closing socket...");
         return -1;
     }
@@ -76,11 +76,13 @@ fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode>
     set_container_hostname(&config.hostname)?;
     // TODO at the moment I do not need to change the mount point
     // as it will be carried out by bubblewrap
-    // set_container_mountpoint(&config.mount_dir, &config.addpaths)?;
     if let Err(e) = userns(config.real_uid, config.real_gid, config.uid) {
         log::error!("Error in namespace configuration: {:?}", e);
     }
+
+    remount_root()?;
     setcapabilities()?;
+    // TODO namespace configuration and clean!
     // setsyscalls()?;
     Ok(())
 }

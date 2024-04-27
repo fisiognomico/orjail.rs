@@ -7,6 +7,7 @@ use std::fs::{create_dir_all, remove_dir};
 use nix::mount::{mount, MsFlags, umount2, MntFlags};
 use nix::unistd::{pivot_root, chdir};
 
+// TODO clean as it does not work and is not needed
 pub fn set_container_mountpoint(mount_dir: &PathBuf, addpaths: &Vec<(PathBuf, PathBuf)>) -> Result<(), Errcode> {
     log::debug!("setting mount points");
     // Setting the mount flags
@@ -56,6 +57,14 @@ pub fn set_container_mountpoint(mount_dir: &PathBuf, addpaths: &Vec<(PathBuf, Pa
     delete_dir(&root_inside_container)?;
 
     Ok(())
+}
+
+pub fn remount_root() -> Result<(), Errcode> {
+    if let Err(e) = mount_directory(Some(&PathBuf::from("none")), &PathBuf::from("/"), vec![MsFlags::MS_REC, MsFlags::MS_PRIVATE]) {
+        return Err(e);
+    }
+    Ok(())
+
 }
 
 pub fn mount_directory(path: Option<&PathBuf>, mount_point: &PathBuf, flags: Vec<MsFlags>) -> Result<(), Errcode> {

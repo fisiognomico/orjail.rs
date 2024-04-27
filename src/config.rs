@@ -26,6 +26,7 @@ impl ContainerOpts{
             .map(|s| CString::new(s).expect("Cannot read arg")).collect();
         let path = argv[0].clone();
 
+        // TODO clean socket conf
         let sockets = generate_socketpair()?;
 
         Ok(
