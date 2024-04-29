@@ -59,10 +59,6 @@ impl Container {
 
     pub fn create(&mut self) -> Result<(), Errcode> {
         let pid = generate_child_process(self.config.clone())?;
-        // if let Err(e) = handle_child_uid_map(pid, self.sockets.0) {
-        //     log::error!("Unable to create uid/gid map: {:?}", e);
-        //     // TODO return Err();
-        // }
         self.child = Some(pid);
 
         log::debug!("Creation finished, PID: {:?} ", self.child.unwrap());

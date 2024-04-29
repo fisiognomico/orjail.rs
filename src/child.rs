@@ -16,7 +16,6 @@ const STACK_SIZE: usize = 1024 * 1024;
 
 pub fn generate_child_process(config: ContainerOpts) -> Result<Pid, Errcode> {
     let mut tmp_stack: [u8; STACK_SIZE] = [0; STACK_SIZE];
-    // TODO here we perfom a root only action, which one?
     let mut flags = CloneFlags::empty();
     flags.insert(CloneFlags::CLONE_NEWNS);
     flags.insert(CloneFlags::CLONE_NEWNET);
@@ -74,8 +73,6 @@ fn child(config: ContainerOpts) -> isize {
 
 fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode> {
     set_container_hostname(&config.hostname)?;
-    // TODO at the moment I do not need to change the mount point
-    // as it will be carried out by bubblewrap
     if let Err(e) = userns(config.real_uid, config.real_gid, config.uid) {
         log::error!("Error in namespace configuration: {:?}", e);
     }

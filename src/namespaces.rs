@@ -1,11 +1,5 @@
 use crate::errors::Errcode;
-// TODO clean IPC
-use crate::ipc::{recv_boolean, send_boolean};
 
-use std::os::unix::io::RawFd;
-use nix::sched::{unshare, CloneFlags};
-use nix::unistd::{getuid, getgid, Uid, Pid, Gid};
-use nix::unistd::{setgroups, setresuid, setresgid};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 
@@ -27,7 +21,6 @@ pub fn userns(real_uid: u32, real_gid: u32, target_uid: u32) -> Result<(), Errco
         return Err(Errcode::NamespacesError(5));
     }
 
-    // TODO is this step really needed? Is there a better way to handle GUID map?
     if let Ok(mut setgroups) = OpenOptions::new().write(true).open("/proc/self/setgroups") {
         if let Err(e) = setgroups.write_all("deny".as_bytes()) {
             log::error!("Unable to write to setgroups: {:?}", e);

@@ -3,7 +3,6 @@ use nix::unistd::sethostname;
 use crate::errors::Errcode;
 use crate::utils::generate_random_str;
 
-// TODO catch RNG init error?
 pub fn generate_hostname() -> Result<String, Errcode> {
     let base_str: String = "orjail".to_string();
     let rand_str: String = generate_random_str(4);
