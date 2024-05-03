@@ -3,6 +3,7 @@ use crate::errors::Errcode;
 use crate::config::ContainerOpts;
 use crate::child::generate_child_process;
 use crate::mountpoint::clean_mounts;
+use crate::net::slirp;
 use crate::resources::clean_cgroups;
 
 use scan_fmt::scan_fmt;
@@ -96,7 +97,9 @@ pub fn start(args: Args) -> Result<(), Errcode> {
         log::error!("Error while creating container: {:?}", e);
         return Err(e);
     }
-    log::debug!("Container child PID: {:?}", container.child);
+    log::debug!("Container child PID: {:?}", container.child.unwrap());
+    // TODO still need to run slirp on the parent!
+    slirp(container.child.unwrap())?;
     wait_child(container.child)?;
     log::debug!("Finished, cleaning & exit");
     container.clean_exit()

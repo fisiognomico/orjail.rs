@@ -8,6 +8,7 @@ mod hostname;
 mod ipc;
 mod mountpoint;
 mod namespaces;
+mod net;
 mod resources;
 mod syscalls;
 mod utils;

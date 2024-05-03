@@ -2,6 +2,9 @@
 use crate::errors::Errcode;
 use crate::utils::generate_random_str;
 
+use rustix::fd::AsFd;
+use rustix::fs::CWD;
+use rustix::mount::{open_tree, move_mount, OpenTreeFlags, MoveMountFlags};
 use std::path::PathBuf;
 use std::fs::{create_dir_all, remove_dir};
 use nix::mount::{mount, MsFlags, umount2, MntFlags};
@@ -36,7 +39,7 @@ pub fn set_container_mountpoint(mount_dir: &PathBuf, addpaths: &Vec<(PathBuf, Pa
     }
     // MAGIC: now we set the /tmp/orjail. directory as the new / root filesystem, and we will
     // move the old / root filesystem in a new directory in /tmp/orjail./oldroot.
-    // We will then take the hurdle of unmounting it to avoid that the container 
+    // We will then take the hurdle of unmounting it to avoid that the container
     // has access to the host filesystem
     let old_root_name = format!("oldroot.{}", generate_random_str(6));
     let old_root = new_root.join(PathBuf::from(old_root_name.clone()));
@@ -126,4 +129,21 @@ pub fn clean_mounts(rootpath: &PathBuf) -> Result<(), Errcode> {
     // of the random suffix of the root mountpoint
     // unmount_path(&rootpath);
     Ok(())
+}
+
+pub fn bind_mount_namespace(from_path: &PathBuf, to_path: &PathBuf) -> Result<(), Errcode>  {
+    // This function mimicks the behaviour of mount --bind dir1 dir2
+    let from_fd = open_tree(CWD, from_path, OpenTreeFlags::OPEN_TREE_CLONE | OpenTreeFlags::OPEN_TREE_CLOEXEC);
+    if from_fd.is_err() {
+        log::error!("Cannot open target path {}: {:?}", from_path.to_str().unwrap(), from_fd.unwrap());
+        return Err(Errcode::MountsError(8));
+    }
+
+    if let Err(e) = move_mount(from_fd.unwrap().as_fd(), "", CWD, to_path, MoveMountFlags::MOVE_MOUNT_F_EMPTY_PATH) {
+        log::error!("Can not mount {} to {}: {:?}", from_path.to_str().unwrap(), to_path.to_str().unwrap(), e);
+        return Err(Errcode::MountsError(9));
+    }
+
+    Ok(())
+
 }

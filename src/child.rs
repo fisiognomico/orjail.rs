@@ -4,6 +4,7 @@ use crate::errors::Errcode;
 use crate::hostname::set_container_hostname;
 use crate::mountpoint::remount_root;
 use crate::namespaces::userns;
+use crate::net::mount_netns;
 use crate::syscalls::setsyscalls;
 
 use nix::unistd::{Pid, close, execve};
@@ -21,7 +22,8 @@ pub fn generate_child_process(config: ContainerOpts) -> Result<Pid, Errcode> {
     flags.insert(CloneFlags::CLONE_NEWNET);
     flags.insert(CloneFlags::CLONE_NEWUSER);
     flags.insert(CloneFlags::CLONE_NEWCGROUP);
-    flags.insert(CloneFlags::CLONE_NEWPID);
+    // FIX with the NEWPID namespace slirp can not find the process id!
+    // flags.insert(CloneFlags::CLONE_NEWPID);
     flags.insert(CloneFlags::CLONE_NEWIPC);
     flags.insert(CloneFlags::CLONE_NEWUTS);
     match unshare(flags) {
@@ -73,6 +75,7 @@ fn child(config: ContainerOpts) -> isize {
 
 fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode> {
     set_container_hostname(&config.hostname)?;
+    mount_netns(&config.hostname)?;
     if let Err(e) = userns(config.real_uid, config.real_gid, config.uid) {
         log::error!("Error in namespace configuration: {:?}", e);
     }

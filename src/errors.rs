@@ -12,6 +12,7 @@ pub enum Errcode{
     HostnameError(u8),
     MountsError(u8),
     NamespacesError(u8),
+    NetworkError(u8),
     NotSupported(u8),
     ResourcesError(u8),
     SocketError(u8),
