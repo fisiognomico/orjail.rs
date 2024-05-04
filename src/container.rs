@@ -12,6 +12,7 @@ use nix::sys::wait::waitpid;
 use nix::unistd::{getuid, getgid, close, Pid};
 use std::os::unix::io::RawFd;
 use std::path::PathBuf;
+use std::thread;
 
 pub struct Container{
     config: ContainerOpts,
@@ -89,7 +90,8 @@ impl Container {
 
 }
 
-pub fn start(args: Args) -> Result<(), Errcode> {
+#[tokio::main]
+pub async fn start(args: Args) -> Result<(), Errcode> {
     check_linux_version()?;
     let mut container = Container::new(args)?;
     if let Err(e) = container.create(){
@@ -99,7 +101,12 @@ pub fn start(args: Args) -> Result<(), Errcode> {
     }
     log::debug!("Container child PID: {:?}", container.child.unwrap());
     // TODO still need to run slirp on the parent!
-    slirp(container.child.unwrap())?;
+    // let network_thread = thread::spawn( move || {
+    //     slirp(container.child.unwrap());
+    // });
+    let network_thread = tokio::spawn( async move {
+        slirp(container.child.unwrap());
+    });
     wait_child(container.child)?;
     log::debug!("Finished, cleaning & exit");
     container.clean_exit()

@@ -2,9 +2,10 @@ use crate::errors::Errcode;
 use crate::mountpoint::{create_directory, bind_mount_namespace};
 use crate::utils::generate_random_str;
 
-use nix::mount::MsFlags;
 use nix::unistd::Pid;
+use rtnetlink::{new_connection, AddressHandle, Handle};
 use std::path::PathBuf;
+use std::net;
 use std::process::{Command, Stdio};
 
 
@@ -32,3 +33,7 @@ pub fn mount_netns(hostname: &String) -> Result<(), Errcode> {
     Ok(())
 
 }
+
+// pub fn setup_veth_peer(veth_idx: u32, ns_ip: &String, subnet: u8) -> Result<(), Errcode> {
+//     let (connection, handle, _) = new_connection
+// }

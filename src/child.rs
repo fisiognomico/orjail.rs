@@ -26,12 +26,12 @@ pub fn generate_child_process(config: ContainerOpts) -> Result<Pid, Errcode> {
     // flags.insert(CloneFlags::CLONE_NEWPID);
     flags.insert(CloneFlags::CLONE_NEWIPC);
     flags.insert(CloneFlags::CLONE_NEWUTS);
-    match unshare(flags) {
-        Ok(_) => log::info!("Unshared namespace successfully!"),
-        Err(e) => log::info!("Unable to unshare: {:?}", e),
-    }
+    // match unshare(flags) {
+    //     Ok(_) => log::info!("Unshared namespace successfully!"),
+    //     Err(e) => log::info!("Unable to unshare: {:?}", e),
+    // }
 
-    flags = CloneFlags::empty();
+    // flags = CloneFlags::empty();
     flags.insert(CloneFlags::CLONE_CHILD_SETTID);
     flags.insert(CloneFlags::CLONE_CHILD_CLEARTID);
     // TODO upgade to nix latest and investigate the feasibility of passing
