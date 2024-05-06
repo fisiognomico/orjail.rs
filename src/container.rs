@@ -1,23 +1,27 @@
 use crate::cli::Args;
 use crate::errors::Errcode;
 use crate::config::ContainerOpts;
-use crate::child::generate_child_process;
+use crate::child::{generate_child_process, run_slirp};
+use crate::ipc::recv_u32;
 use crate::mountpoint::clean_mounts;
 use crate::net::slirp;
 use crate::resources::clean_cgroups;
 
 use scan_fmt::scan_fmt;
+use nix::sys::signal::{kill, SIGQUIT};
 use nix::sys::utsname::uname;
 use nix::sys::wait::waitpid;
 use nix::unistd::{getuid, getgid, close, Pid};
 use std::os::unix::io::RawFd;
 use std::path::PathBuf;
-use std::thread;
+use std::process::{Command, Stdio};
+use std::sync::Arc;
 
 pub struct Container{
     config: ContainerOpts,
     sockets: (RawFd, RawFd),
-    child: Option<Pid>,
+    pub child: Option<Pid>,
+    pub slirp: Option<Pid>,
 }
 
 impl Container {
@@ -56,6 +60,7 @@ impl Container {
             config,
             sockets,
             child: None,
+            slirp: None,
             })
         }
 
@@ -67,17 +72,32 @@ impl Container {
         Ok(())
     }
 
+    pub fn run_slirp(&mut self) -> Result<(), Errcode> {
+        let child_pid = self.child.unwrap();
+        let mut slirp_pid = run_slirp(child_pid).unwrap();
+        // TODO we should not harcode this
+        // The problem is that child returns the PID of the forked thread
+        // and of course not the one the process that it executes
+        slirp_pid = Pid::from_raw(slirp_pid.as_raw() + 1);
+        self.slirp = Some(slirp_pid);
+        log::debug!("[+] Saved SLIRP PID: {}", self.slirp.unwrap());
+
+        log::debug!("slirp PID: {:?} ", self.slirp.unwrap());
+        Ok(())
+    }
+
     pub fn clean_exit(&mut self) -> Result<(), Errcode>{
         log::debug!("Cleaning container");
 
         if let Err(e) = close(self.sockets.0){
-            log::error!("Unable to close write socket: {:?}", e);
-            return Err(Errcode::SocketError(3));
+            return Err(Errcode::SocketError(format!("Unable to close write socket: {:?}", e)));
         }
         if let Err(e) = close(self.sockets.1){
-            log::error!("Unable to close read socket: {:?}", e);
-            return Err(Errcode::SocketError(4));
+            return Err(Errcode::SocketError(format!("Unable to close read socket: {:?}", e)));
         }
+
+        // Here we can not catch errors as its not returned
+        let _ = kill(self.slirp.expect("No slirp process has been spawned!"), SIGQUIT);
 
         clean_mounts(&self.config.mount_dir)?;
 
@@ -100,15 +120,11 @@ pub async fn start(args: Args) -> Result<(), Errcode> {
         return Err(e);
     }
     log::debug!("Container child PID: {:?}", container.child.unwrap());
-    // TODO still need to run slirp on the parent!
-    // let network_thread = thread::spawn( move || {
-    //     slirp(container.child.unwrap());
-    // });
-    let network_thread = tokio::spawn( async move {
-        slirp(container.child.unwrap());
-    });
+    container.run_slirp();
+
     wait_child(container.child)?;
     log::debug!("Finished, cleaning & exit");
+
     container.clean_exit()
 }
 

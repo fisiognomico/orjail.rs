@@ -4,7 +4,7 @@ use crate::errors::Errcode;
 use crate::hostname::set_container_hostname;
 use crate::mountpoint::remount_root;
 use crate::namespaces::userns;
-use crate::net::mount_netns;
+use crate::net::{mount_netns, slirp};
 use crate::syscalls::setsyscalls;
 
 use nix::unistd::{Pid, close, execve};
@@ -14,6 +14,23 @@ use nix::sched::CloneFlags;
 use std::ffi::CString;
 
 const STACK_SIZE: usize = 1024 * 1024;
+
+pub fn run_slirp(child_pid: Pid) -> Result<Pid, Errcode> {
+    let mut tmp_stack: [u8; STACK_SIZE] = [0; STACK_SIZE];
+    let mut flags = CloneFlags::empty();
+    flags.insert(CloneFlags::CLONE_CHILD_SETTID);
+    flags.insert(CloneFlags::CLONE_CHILD_CLEARTID);
+
+    match clone(
+        Box::new(|| slirp(child_pid.clone())),
+        &mut tmp_stack,
+        flags,
+        Some(Signal::SIGCHLD as i32)
+        ) {
+        Ok(pid) => Ok(pid),
+        Err(_) => Err(Errcode::ChildProcessError(0)),
+    }
+}
 
 pub fn generate_child_process(config: ContainerOpts) -> Result<Pid, Errcode> {
     let mut tmp_stack: [u8; STACK_SIZE] = [0; STACK_SIZE];
@@ -75,7 +92,10 @@ fn child(config: ContainerOpts) -> isize {
 
 fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode> {
     set_container_hostname(&config.hostname)?;
-    mount_netns(&config.hostname)?;
+    if let Err(e) = mount_netns(&config.hostname) {
+        log::error!("{:?}", e);
+        // TODO return error and check status for each call
+    };
     if let Err(e) = userns(config.real_uid, config.real_gid, config.uid) {
         log::error!("Error in namespace configuration: {:?}", e);
     }
@@ -86,3 +106,4 @@ fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode>
     // setsyscalls()?;
     Ok(())
 }
+

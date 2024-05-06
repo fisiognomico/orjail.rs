@@ -21,4 +21,5 @@ syscallz = "0.16.1"
 rustix = { version = "0.38.34", features = [ "fs", "mount"]}
 rtnetlink = "0.14.1"
 tokio = { version = "1", features = ["full"] }
+thiserror = "1.0.59"
 # which = "6.0.1"
