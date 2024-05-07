@@ -22,4 +22,5 @@ rustix = { version = "0.38.34", features = [ "fs", "mount"]}
 rtnetlink = "0.14.1"
 tokio = { version = "1", features = ["full"] }
 thiserror = "1.0.59"
+futures = "0.3.30"
 # which = "6.0.1"
