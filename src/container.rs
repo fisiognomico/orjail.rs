@@ -110,8 +110,8 @@ impl Container {
 
 }
 
-#[tokio::main]
-pub async fn start(args: Args) -> Result<(), Errcode> {
+// #[tokio::main]
+pub fn start(args: Args) -> Result<(), Errcode> {
     check_linux_version()?;
     let mut container = Container::new(args)?;
     if let Err(e) = container.create(){
