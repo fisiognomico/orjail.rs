@@ -8,7 +8,7 @@ use crate::net::slirp;
 use crate::resources::clean_cgroups;
 
 use scan_fmt::scan_fmt;
-use nix::sys::signal::{kill, SIGQUIT};
+use nix::sys::signal::{kill, SIGKILL};
 use nix::sys::utsname::uname;
 use nix::sys::wait::waitpid;
 use nix::unistd::{getuid, getgid, close, Pid};
@@ -97,7 +97,7 @@ impl Container {
         }
 
         // Here we can not catch errors as its not returned
-        let _ = kill(self.slirp.expect("No slirp process has been spawned!"), SIGQUIT);
+        let _ = kill(self.slirp.expect("No slirp process has been spawned!"), SIGKILL);
 
         clean_mounts(&self.config.mount_dir)?;
 

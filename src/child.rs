@@ -4,7 +4,7 @@ use crate::errors::Errcode;
 use crate::hostname::set_container_hostname;
 use crate::mountpoint::remount_root;
 use crate::namespaces::userns;
-use crate::net::{mount_netns, slirp};
+use crate::net::{mount_netns, prepare_net, slirp};
 use crate::syscalls::setsyscalls;
 
 use nix::unistd::{Pid, close, execve};
@@ -91,6 +91,10 @@ fn child(config: ContainerOpts) -> isize {
 }
 
 fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode> {
+    let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+    // This information should be contained in confs
+    let (bridge_idx, veth_idx, veth_2_idx) = rt.block_on(
+        prepare_net(config.hostname.clone(), "10.99.99.1", 24)).expect("Failed to prepare network");
     set_container_hostname(&config.hostname)?;
     if let Err(e) = mount_netns(&config.hostname) {
         log::error!("{:?}", e);
