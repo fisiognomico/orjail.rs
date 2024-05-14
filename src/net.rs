@@ -136,13 +136,25 @@ async fn create_veth_pair(bridge_idx: u32) -> Result<(u32, u32), Errcode> {
 
 }
 
-pub async fn join_veth_to_ns(veth_idx: u32, pid: u32) -> Result<(), Errcode> {
+pub async fn join_veth_to_ns_pid(veth_idx: u32, pid: u32) -> Result<(), Errcode> {
     let (connection, handle, _) = new_connection()?;
     tokio::spawn(connection);
 
     handle.link().set(veth_idx).setns_by_pid(pid).execute().await
         .map_err(|e| {
             Errcode::NetworkError(format!("Set veth {} to process {} failed: {}", veth_idx, pid, e))
+    })?;
+
+    Ok(())
+}
+
+pub async fn join_veth_to_ns_fd(veth_idx: u32, fd: i32) -> Result<(), Errcode> {
+    let (connection, handle, _) = new_connection()?;
+    tokio::spawn(connection);
+
+    handle.link().set(veth_idx).setns_by_fd(fd).execute().await
+        .map_err(|e| {
+            Errcode::NetworkError(format!("Set veth {} to fd {} failed: {}", veth_idx, fd, e))
     })?;
 
     Ok(())
