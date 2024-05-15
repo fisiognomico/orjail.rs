@@ -92,10 +92,8 @@ fn child(config: ContainerOpts) -> isize {
 
 fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode> {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-    // This information should be contained in confs
-    let (bridge_idx, veth_idx, veth_2_idx) = rt.block_on(
-        prepare_net(config.hostname.clone(), "10.99.99.1", 24)).expect("Failed to prepare network");
     set_container_hostname(&config.hostname)?;
+    // TODO by looking at the rnetlink implementation maybe we do not need this step
     if let Err(e) = mount_netns(&config.hostname) {
         log::error!("{:?}", e);
         // TODO return error and check status for each call
@@ -105,7 +103,10 @@ fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode>
     }
 
     remount_root()?;
-    setcapabilities()?;
+    // TODO maybe change name to the network namespace and make these parameters configurable
+    let (veth_idx, veth_2_idx) = rt.block_on(
+        prepare_net("porcodio".to_string(), "10.40.50.10", "10.40.50.20", 24)).expect("Failed to prepare network");
+    // setcapabilities()?;
     // TODO namespace configuration and clean!
     // setsyscalls()?;
     Ok(())

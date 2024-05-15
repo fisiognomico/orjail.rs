@@ -5,8 +5,11 @@ use crate::mountpoint::{create_directory, bind_mount_namespace};
 use crate::utils::generate_random_str;
 
 use futures::TryStreamExt;
-use nix::unistd::Pid;
-use rtnetlink::{new_connection, AddressHandle, Handle};
+use nix::fcntl::{open, OFlag};
+use nix::sys::stat::Mode;
+use nix::sys::wait::{waitpid, WaitStatus};
+use nix::unistd::{fork, ForkResult, Pid};
+use rtnetlink::{new_connection, AddressHandle, Handle, NetworkNamespace};
 use std::net::{IpAddr, Ipv4Addr};
 use std::os::unix::io::RawFd;
 use std::path::PathBuf;
@@ -41,23 +44,24 @@ pub fn mount_netns(hostname: &String) -> Result<(), Errcode> {
 
 }
 
-pub async fn prepare_net(bridge_name: String, bridge_ip: &str, subnet: u8) -> Result<(u32, u32, u32), Errcode> {
+pub async fn prepare_net(ns_name: String, veth_ip: &str, veth_2_ip: &str, subnet: u8) -> Result<(u32, u32), Errcode> {
     let (connection, handle, _) = new_connection()?;
     tokio::spawn(connection);
 
-    log::info!("Interact with bridge {} at cidr {}/{}", bridge_name, bridge_ip, subnet);
+    let ns_fd = open_namespace(&ns_name).await?;
 
-    // create bridge if it does not exist
-    let bridge_idx = match get_bridge_idx(&handle, bridge_name.clone()).await {
-        Ok(idx) => {
-            log::info!("bridge {} already exist", bridge_name);
-            idx
-        },
-        Err(_) => create_bridge(bridge_name, bridge_ip, subnet).await?,
-    };
+    let (veth_idx, veth_2_idx) = create_veth_pair(veth_ip, veth_2_ip, subnet).await?;
 
-    let (veth_idx, veth_2_idx) = create_veth_pair(bridge_idx).await?;
-    Ok((bridge_idx, veth_idx, veth_2_idx))
+    
+    // Configure networking in the child namespace:
+    // Fork a process that is set to the newly created namespace
+    // Here set the veth ip addr, routing tables etc.
+    // Unfortunately the NetworkNamespace interface of rtnetlink does
+    // not offer these functionalities
+    join_veth_to_ns_fd(veth_2_idx, ns_fd).await?;
+    // Try to set lo up in namespace
+    // set_lo_up(ns_name).await?;
+    Ok((veth_idx, veth_2_idx))
 }
 
 async fn get_bridge_idx(handle: &Handle, bridge_name: String) -> Result<u32, Errcode> {
@@ -99,7 +103,7 @@ async fn create_bridge(name: String, bridge_ip: &str, subnet: u8) -> Result<u32,
     Ok(bridge_idx)
 }
 
-async fn create_veth_pair(bridge_idx: u32) -> Result<(u32, u32), Errcode> {
+async fn create_veth_pair(veth_addr: &str, veth2_addr: &str, subnet: u8) -> Result<(u32, u32), Errcode> {
     let (connection, handle, _) = new_connection()?;
     tokio::spawn(connection);
 
@@ -125,12 +129,33 @@ async fn create_veth_pair(bridge_idx: u32) -> Result<(u32, u32), Errcode> {
             Errcode::NetworkError(format!("Setting veth {} up failed: {}", veth, e));
     });
 
-    // set master veth to bridge
-    // TODO the method master() has been deprecated
-    handle.link().set(veth_idx).master(bridge_idx).execute().await
+    let veth_ip_addr = IpAddr::V4(Ipv4Addr::from_str(veth_addr)?);
+    AddressHandle::new(handle.clone()).add(veth_idx, veth_ip_addr, subnet).execute().await
         .map_err(|e| {
-            Errcode::NetworkError(format!("Unable to set veth {} to bridge with idx {}: {}", veth, bridge_idx, e))
-    })?;
+            Errcode::NetworkError(format!("Setting addr {} to veth {} failed: {}", veth_addr, veth, e));
+    });
+
+    let veth2_ip_addr = IpAddr::V4(Ipv4Addr::from_str(veth2_addr)?);
+    AddressHandle::new(handle.clone()).add(veth_2_idx, veth2_ip_addr, subnet).execute().await
+        .map_err(|e| {
+            Errcode::NetworkError(format!("Setting addr {} to veth {} failed: {}", veth2_addr, veth_2, e));
+    });
+
+    // set interface veth2 up
+    handle.link().set(veth_2_idx).up().execute().await
+        .map_err(|e| {
+            Errcode::NetworkError(format!("Setting veth with idx {} up failed: {}", veth_idx, e));
+    });
+
+    // set lo interface up
+    // TODO move to another function called in the namespace
+    // let lo_idx = handle.link().get().match_name("lo".to_string()).execute().try_next().await?
+    //             .ok_or_else(|| Errcode::NetworkError(format!("Can not find lo interface for namespace {}", ns_ip)))?
+    //             .header.index;
+
+    // handle.link().set(lo_idx).up().execute().await
+    //     .map_err(|e| {Errcode::NetworkError(format!("Can not set lo interface up: {}", e))
+    // });
 
     Ok((veth_idx, veth_2_idx))
 
@@ -158,6 +183,36 @@ pub async fn join_veth_to_ns_fd(veth_idx: u32, fd: i32) -> Result<(), Errcode> {
     })?;
 
     Ok(())
+}
+
+async fn open_namespace(ns_name: &String) -> Result<RawFd, Errcode> {
+
+    let ns_path = PathBuf::from(format!("{}{}", NETNS, ns_name));
+
+    // Use rnetlink to create namespace
+    NetworkNamespace::add(ns_name.to_string()).await.map_err(|e| {
+        Errcode::NetworkError(format!{"Can not create network namespace {}: {}", ns_name, e})
+    })?;
+
+
+    match open(&ns_path, OFlag::empty(), Mode::empty()) {
+        Ok(fd) => return Ok(fd),
+        Err(e) => {
+            log::error!("Can not create network namespace {}: {}", ns_name, e);
+            return Err(Errcode::NetworkError(format!("Can not create network namespace {}: {}", ns_name, e)));
+        }
+    }
+}
+
+async fn set_lo_up() -> Result<(), Errcode> {
+    let (connection, handle, _) = new_connection()?;
+    let lo_idx = handle.link().get().match_name("lo".to_string()).execute().try_next().await?
+                .ok_or_else(|| Errcode::NetworkError(format!("Can not find lo interface ")))?
+                .header.index;
+    handle.link().set(lo_idx).up().execute().await
+        .map_err(|e| {Errcode::NetworkError(format!("Can not set lo interface up: {}", e))
+    })?;
+     Ok(())
 }
 
 // TODO continue configure address interface definition
