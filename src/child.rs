@@ -3,12 +3,12 @@ use crate::config::ContainerOpts;
 use crate::errors::Errcode;
 use crate::hostname::set_container_hostname;
 use crate::mountpoint::remount_root;
-use crate::namespaces::userns;
-use crate::net::{mount_netns, prepare_net, slirp};
+use crate::namespaces::{mount_netns, userns};
+use crate::net::{prepare_net, slirp};
 use crate::syscalls::setsyscalls;
 
 use nix::unistd::{Pid, close, execve};
-use nix::sched::{unshare, clone};
+use nix::sched::clone;
 use nix::sys::signal::Signal;
 use nix::sched::CloneFlags;
 use std::ffi::CString;
@@ -39,16 +39,10 @@ pub fn generate_child_process(config: ContainerOpts) -> Result<Pid, Errcode> {
     flags.insert(CloneFlags::CLONE_NEWNET);
     flags.insert(CloneFlags::CLONE_NEWUSER);
     flags.insert(CloneFlags::CLONE_NEWCGROUP);
-    // FIX with the NEWPID namespace slirp can not find the process id!
     // flags.insert(CloneFlags::CLONE_NEWPID);
     flags.insert(CloneFlags::CLONE_NEWIPC);
     flags.insert(CloneFlags::CLONE_NEWUTS);
-    // match unshare(flags) {
-    //     Ok(_) => log::info!("Unshared namespace successfully!"),
-    //     Err(e) => log::info!("Unable to unshare: {:?}", e),
-    // }
 
-    // flags = CloneFlags::empty();
     flags.insert(CloneFlags::CLONE_CHILD_SETTID);
     flags.insert(CloneFlags::CLONE_CHILD_CLEARTID);
     // TODO upgade to nix latest and investigate the feasibility of passing

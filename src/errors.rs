@@ -18,7 +18,7 @@ pub enum Errcode{
     #[error("Error while mounting container fs {0}")]
     MountsError(u8),
     #[error("Error in namespace creation {0}")]
-    NamespacesError(u8),
+    NamespacesError(String),
     #[error("Error in network creation: {0}")]
     NetworkError(String),
     #[error("Functionality not supported")]

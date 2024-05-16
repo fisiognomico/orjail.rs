@@ -1,18 +1,13 @@
-use crate::container::Container;
 use crate::errors::Errcode;
 use crate::ipc::send_u32;
-use crate::mountpoint::{create_directory, bind_mount_namespace};
+use crate::namespaces::open_namespace;
 use crate::utils::generate_random_str;
 
 use futures::TryStreamExt;
-use nix::fcntl::{open, OFlag};
-use nix::sys::stat::Mode;
 use nix::sys::wait::{waitpid, WaitStatus};
-use nix::unistd::{fork, ForkResult, Pid};
-use rtnetlink::{new_connection, AddressHandle, Handle, NetworkNamespace};
+use nix::unistd::Pid;
+use rtnetlink::{new_connection, AddressHandle, Handle};
 use std::net::{IpAddr, Ipv4Addr};
-use std::os::unix::io::RawFd;
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::str::FromStr;
 
@@ -30,20 +25,6 @@ pub fn slirp(pid: Pid) -> isize {
 
 }
 
-pub fn mount_netns(hostname: &String) -> Result<(), Errcode> {
-    let netns_mount = PathBuf::from(format!("/tmp/{}", hostname));
-    create_directory(&netns_mount)?;
-    let netns_dir = PathBuf::from(NETNS);
-    // It's not mount(2) that I need to use
-    if let Err(e) = bind_mount_namespace(&netns_mount, &netns_dir) {
-        log::error!("Can not remount network namespace inside the container: {:?}", e);
-        return Err(Errcode::NetworkError(format!("Can not remount network namespace inside the container: {:?}", e)));
-    }
-
-    Ok(())
-
-}
-
 pub async fn prepare_net(ns_name: String, veth_ip: &str, veth_2_ip: &str, subnet: u8) -> Result<(u32, u32), Errcode> {
     let (connection, handle, _) = new_connection()?;
     tokio::spawn(connection);
@@ -58,6 +39,39 @@ pub async fn prepare_net(ns_name: String, veth_ip: &str, veth_2_ip: &str, subnet
     // Here set the veth ip addr, routing tables etc.
     // Unfortunately the NetworkNamespace interface of rtnetlink does
     // not offer these functionalities
+    // match unsafe { fork() } {
+    //     Ok(ForkResult::Parent { child, .. }) => {
+    //         // Parent process
+    //         log::trace!("[Parent] Child PID: {}", child);
+    //         match waitpid(child, None) {
+    //             Ok(wait_status) => match wait_status {
+    //                 WaitStatus::Exited(_, res) => {
+    //                     log::trace!("Child exited with: {}", res);
+    //                 }
+    //                 WaitStatus::Signaled(_, signal, coredump) => {
+    //                     log::error!("Child process killed by signal {signal} with core dump {coredump}");
+    //                 }
+
+    //                 _ => {
+    //                     log::error!("Unknown child process status: {:?}", wait_status);
+    //                 }
+    //             }
+    //             Err(e) => {
+    //                 log::error!("wait error : {}", e);
+    //             }
+    //         }
+    //     }
+    //     Ok(ForkResult::Child) => {
+    //         // Child process
+    //         // Move the child to the target namespace
+    //         NetworkNamespace::unshare_processing(format!("/run/netns/{}", ns_name))?;
+    //         set_lo_up().await;
+    //         std::process::exit(0);
+    //     }
+    //     Err(e) => {
+    //         log::error!("Can not fork() for ns creation: {}", e);
+    //     }
+    // }
     join_veth_to_ns_fd(veth_2_idx, ns_fd).await?;
     // Try to set lo up in namespace
     // set_lo_up(ns_name).await?;
@@ -183,25 +197,6 @@ pub async fn join_veth_to_ns_fd(veth_idx: u32, fd: i32) -> Result<(), Errcode> {
     })?;
 
     Ok(())
-}
-
-async fn open_namespace(ns_name: &String) -> Result<RawFd, Errcode> {
-
-    let ns_path = PathBuf::from(format!("{}{}", NETNS, ns_name));
-
-    // Use rnetlink to create namespace
-    NetworkNamespace::add(ns_name.to_string()).await.map_err(|e| {
-        Errcode::NetworkError(format!{"Can not create network namespace {}: {}", ns_name, e})
-    })?;
-
-
-    match open(&ns_path, OFlag::empty(), Mode::empty()) {
-        Ok(fd) => return Ok(fd),
-        Err(e) => {
-            log::error!("Can not create network namespace {}: {}", ns_name, e);
-            return Err(Errcode::NetworkError(format!("Can not create network namespace {}: {}", ns_name, e)));
-        }
-    }
 }
 
 async fn set_lo_up() -> Result<(), Errcode> {
