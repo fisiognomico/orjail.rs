@@ -1,16 +1,14 @@
 use crate::errors::Errcode;
 use crate::ipc::send_u32;
-use crate::namespaces::open_namespace;
+use crate::namespaces::{open_namespace, run_in_namespace};
 use crate::utils::generate_random_str;
 
 use futures::TryStreamExt;
-use nix::sys::wait::{waitpid, WaitStatus};
 use nix::unistd::Pid;
 use rtnetlink::{new_connection, AddressHandle, Handle};
 use std::net::{IpAddr, Ipv4Addr};
 use std::process::{Command, Stdio};
 use std::str::FromStr;
-
 
 static NETNS: &str = "/var/run/netns/";
 
@@ -31,48 +29,12 @@ pub async fn prepare_net(ns_name: String, veth_ip: &str, veth_2_ip: &str, subnet
 
     let ns_fd = open_namespace(&ns_name).await?;
 
-    let (veth_idx, veth_2_idx) = create_veth_pair(veth_ip, veth_2_ip, subnet).await?;
+    let (veth_idx, veth_2_idx) = create_veth_pair(&ns_name, veth_ip, veth_2_ip, subnet).await?;
 
-    
-    // Configure networking in the child namespace:
-    // Fork a process that is set to the newly created namespace
-    // Here set the veth ip addr, routing tables etc.
-    // Unfortunately the NetworkNamespace interface of rtnetlink does
-    // not offer these functionalities
-    // match unsafe { fork() } {
-    //     Ok(ForkResult::Parent { child, .. }) => {
-    //         // Parent process
-    //         log::trace!("[Parent] Child PID: {}", child);
-    //         match waitpid(child, None) {
-    //             Ok(wait_status) => match wait_status {
-    //                 WaitStatus::Exited(_, res) => {
-    //                     log::trace!("Child exited with: {}", res);
-    //                 }
-    //                 WaitStatus::Signaled(_, signal, coredump) => {
-    //                     log::error!("Child process killed by signal {signal} with core dump {coredump}");
-    //                 }
 
-    //                 _ => {
-    //                     log::error!("Unknown child process status: {:?}", wait_status);
-    //                 }
-    //             }
-    //             Err(e) => {
-    //                 log::error!("wait error : {}", e);
-    //             }
-    //         }
-    //     }
-    //     Ok(ForkResult::Child) => {
-    //         // Child process
-    //         // Move the child to the target namespace
-    //         NetworkNamespace::unshare_processing(format!("/run/netns/{}", ns_name))?;
-    //         set_lo_up().await;
-    //         std::process::exit(0);
-    //     }
-    //     Err(e) => {
-    //         log::error!("Can not fork() for ns creation: {}", e);
-    //     }
-    // }
+    // moved to namespace crate
     join_veth_to_ns_fd(veth_2_idx, ns_fd).await?;
+    run_in_namespace(&ns_name, veth_ip, veth_2_ip).await?;
     // Try to set lo up in namespace
     // set_lo_up(ns_name).await?;
     Ok((veth_idx, veth_2_idx))
@@ -117,11 +79,11 @@ async fn create_bridge(name: String, bridge_ip: &str, subnet: u8) -> Result<u32,
     Ok(bridge_idx)
 }
 
-async fn create_veth_pair(veth_addr: &str, veth2_addr: &str, subnet: u8) -> Result<(u32, u32), Errcode> {
+async fn create_veth_pair(veth_name: &String, veth_addr: &str, veth2_addr: &str, subnet: u8) -> Result<(u32, u32), Errcode> {
     let (connection, handle, _) = new_connection()?;
     tokio::spawn(connection);
 
-    let veth = format!("veth{}", generate_random_str(4));
+    let veth = format!("{}", veth_name);
     let veth_2 = format!("{}_peer", veth);
 
     handle.link().add().veth(veth.clone(), veth_2.clone()).execute().await
@@ -197,17 +159,6 @@ pub async fn join_veth_to_ns_fd(veth_idx: u32, fd: i32) -> Result<(), Errcode> {
     })?;
 
     Ok(())
-}
-
-async fn set_lo_up() -> Result<(), Errcode> {
-    let (connection, handle, _) = new_connection()?;
-    let lo_idx = handle.link().get().match_name("lo".to_string()).execute().try_next().await?
-                .ok_or_else(|| Errcode::NetworkError(format!("Can not find lo interface ")))?
-                .header.index;
-    handle.link().set(lo_idx).up().execute().await
-        .map_err(|e| {Errcode::NetworkError(format!("Can not set lo interface up: {}", e))
-    })?;
-     Ok(())
 }
 
 // TODO continue configure address interface definition
