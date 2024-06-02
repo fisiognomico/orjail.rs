@@ -1,5 +1,5 @@
 use crate::errors::Errcode;
-use crate::mountpoint::{bind_mount_namespace, create_directory};
+use crate::mountpoint::{bind_mount_namespace, create_directory, mount_directory, unmount_path};
 // use crate::net::set_veth_up;
 
 use nix::fcntl::{open, OFlag};
@@ -8,13 +8,14 @@ use nix::sched::{CloneFlags, unshare, setns};
 use nix::unistd::{fork, ForkResult, Pid};
 use nix::sys::wait::{waitpid, WaitStatus};
 use nix::sys::stat::Mode;
+use nix::sys::statvfs::{statvfs, FsFlags};
 use rtnetlink::{new_connection, NetworkNamespace};
 use futures::TryStreamExt;
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::io::Write;
-use std::os::unix::io::RawFd;
+use std::os::unix::io::{FromRawFd ,RawFd};
 
 // This function will be called by the child during its configuration
 // to create its namespace.
@@ -104,9 +105,6 @@ pub async fn run_in_namespace(ns_name: &String, veth_ip: &str, veth_2_ip: &str) 
             // Child process
             // Move the child to the target namespace
             run_child(ns_name, veth_ip, veth_2_ip).await
-            // NetworkNamespace::unshare_processing(format!("/run/netns/{}", ns_name))?;
-            // set_lo_up().await;
-            // std::process::exit(0);
         }
         Err(e) => {
             log::error!("Can not fork() for ns creation: {}", e);
@@ -174,7 +172,9 @@ async fn split_namespace(ns_name: &String, veth_ip: &str, veth_2_ip: &str) -> Re
     open_flags.insert(OFlag::O_CLOEXEC);
 
     let fd = match open(Path::new(&ns_path), open_flags, Mode::empty()) {
-        Ok(raw_fd) => raw_fd,
+        Ok(raw_fd) => unsafe {
+            File::from_raw_fd(raw_fd)
+        }
         Err(e) => {
             log::error!("Can not open network namespace: {}", e);
             return Err(Errcode::NamespacesError(format!("Can not open network namespace: {}", e)));
@@ -191,14 +191,37 @@ async fn split_namespace(ns_name: &String, veth_ip: &str, veth_2_ip: &str) -> Re
         return Err(Errcode::NamespacesError(format!("Can not unshare: {}", e)));
     }
     // mount blind the fs
+    // let's avoid that any mount propagates to the parent process
+    mount_directory(None, &PathBuf::from("/"), vec![MsFlags::MS_REC, MsFlags::MS_PRIVATE])?;
+
+    // Now unmount /sys
+    let sys_path = PathBuf::from("/sys");
     let mut mount_flags = MsFlags::empty();
-    mount_flags.insert(MsFlags::MS_REC);
-    mount_flags.insert(MsFlags::MS_SLAVE);
-    // let's
-    //
+    // Needed to respect the trait for NixPath
+    let ns_name_path = PathBuf::from(ns_name);
+
+    // TODO do not exit for EINVAL error
+    // unmount_path(&sys_path)?;
+    // consider the case that a sysfs is not present
+    let stat_sys = statvfs(&sys_path)
+        .map_err(|e| {
+            log::error!("Can not stat sys: {}", e);
+    }).unwrap();
+    if stat_sys.flags().contains(FsFlags::ST_RDONLY) {
+        mount_flags.insert(MsFlags::MS_RDONLY);
+    }
+
+    // and remount a version of /sys that describes the network namespace
+    if let Err(e) = mount::<PathBuf, PathBuf, str, PathBuf>(Some(&ns_name_path), &sys_path, Some("sysfs"), mount_flags, None) {
+        log::error!("Can not remount /sys to namespace: {}", e);
+        return Err(Errcode::NamespacesError(format!("Can not remount /sys to namespace: {}", e)));
+    }
 
     // call net_conf
     net_conf(ns_name, veth_ip, veth_2_ip).await?;
+    // ISSUE Unfortunately configuring the interfaces properly inside
+    // a network namespace with rtnetlink results in a deadlock
+    // set_lo_up().await?;
 
     Ok(())
 }
@@ -243,6 +266,19 @@ async fn set_veth_up() -> Result<(), Errcode> {
         }
     }
     let veth_idx = handle.link().get().match_name("test_veth".to_string()).execute().try_next().await?
+                .ok_or_else(|| Errcode::NetworkError(format!("Can not find lo interface ")))?
+                .header.index;
+    log::debug!("LO INTERFACE INDEX: {}", veth_idx);
+    handle.link().set(veth_idx).up().execute().await
+         .map_err(|e| {Errcode::NetworkError(format!("Can not set lo interface up: {}", e))
+     })?;
+     Ok(())
+}
+
+async fn set_lo_up() -> Result<(), Errcode> {
+    let (connection, handle, _) = new_connection()?;
+    log::debug!("ARE WE STOPPING YET???");
+    let veth_idx = handle.link().get().match_name("lo".to_string()).execute().try_next().await?
                 .ok_or_else(|| Errcode::NetworkError(format!("Can not find lo interface ")))?
                 .header.index;
     log::debug!("LO INTERFACE INDEX: {}", veth_idx);

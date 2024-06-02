@@ -7,7 +7,7 @@ use crate::namespaces::{mount_netns, userns};
 use crate::net::{prepare_net, slirp};
 use crate::syscalls::setsyscalls;
 
-use nix::unistd::{Pid, close, execve};
+use nix::unistd::{fork, ForkResult, Pid, close, execve};
 use nix::sched::clone;
 use nix::sys::signal::Signal;
 use nix::sched::CloneFlags;
@@ -18,17 +18,17 @@ const STACK_SIZE: usize = 1024 * 1024;
 pub fn run_slirp(child_pid: Pid) -> Result<Pid, Errcode> {
     let mut tmp_stack: [u8; STACK_SIZE] = [0; STACK_SIZE];
     let mut flags = CloneFlags::empty();
-    flags.insert(CloneFlags::CLONE_CHILD_SETTID);
-    flags.insert(CloneFlags::CLONE_CHILD_CLEARTID);
 
-    match clone(
-        Box::new(|| slirp(child_pid.clone())),
-        &mut tmp_stack,
-        flags,
-        Some(Signal::SIGCHLD as i32)
-        ) {
-        Ok(pid) => Ok(pid),
-        Err(_) => Err(Errcode::ChildProcessError(0)),
+    unsafe {
+        match clone(
+            Box::new(|| slirp(child_pid.clone())),
+            &mut tmp_stack,
+            flags,
+            Some(Signal::SIGCHLD as i32)
+            ) {
+            Ok(pid) => Ok(pid),
+            Err(_) => Err(Errcode::ChildProcessError(0)),
+        }
     }
 }
 
@@ -39,22 +39,22 @@ pub fn generate_child_process(config: ContainerOpts) -> Result<Pid, Errcode> {
     flags.insert(CloneFlags::CLONE_NEWNET);
     flags.insert(CloneFlags::CLONE_NEWUSER);
     flags.insert(CloneFlags::CLONE_NEWCGROUP);
-    // flags.insert(CloneFlags::CLONE_NEWPID);
+    flags.insert(CloneFlags::CLONE_NEWPID);
     flags.insert(CloneFlags::CLONE_NEWIPC);
     flags.insert(CloneFlags::CLONE_NEWUTS);
 
-    flags.insert(CloneFlags::CLONE_CHILD_SETTID);
-    flags.insert(CloneFlags::CLONE_CHILD_CLEARTID);
     // TODO upgade to nix latest and investigate the feasibility of passing
     // NULL as the child stack.
-    match clone(
-        Box::new(|| child(config.clone())),
-        &mut tmp_stack,
-        flags,
-        Some(Signal::SIGCHLD as i32)
-        ) {
-        Ok(pid) => Ok(pid),
-        Err(_) => Err(Errcode::ChildProcessError(0)),
+    unsafe {
+        match clone(
+            Box::new(|| child(config.clone())),
+            &mut tmp_stack,
+            flags,
+            Some(Signal::SIGCHLD as i32)
+            ) {
+            Ok(pid) => Ok(pid),
+            Err(_) => Err(Errcode::ChildProcessError(0)),
+        }
     }
 }
 
@@ -68,11 +68,6 @@ fn child(config: ContainerOpts) -> isize {
     }
 
     // TODO clean socket conf
-    if let Err(_) = close(config.fd) {
-        log::error!("Error while closing socket...");
-        return -1;
-    }
-
     log::info!("Starting container with command: {} and args: {:?}", config.path.to_str().unwrap(), config.argv);
     let retcode = match execve::<CString, CString>(&config.path, &config.argv, &[]) {
         Ok(_) => 0,
