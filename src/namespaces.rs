@@ -22,6 +22,7 @@ use std::os::unix::io::{FromRawFd ,RawFd};
 const UID_COUNT: u64 = 1;
 const GID_COUNT: u64 = 1;
 static NETNS: &str = "/run/netns/";
+static VAR_LIB: &str = "/var/lib";
 
 pub fn userns(real_uid: u32, real_gid: u32, target_uid: u32) -> Result<(), Errcode> {
     log::debug!("Switching to uid {} / gid {}...", target_uid, target_uid);
@@ -75,11 +76,25 @@ pub async fn open_namespace(ns_name: &String) -> Result<RawFd, Errcode> {
 }
 
 pub fn mount_netns(hostname: &String) -> Result<(), Errcode> {
-    let netns_mount = PathBuf::from(format!("/tmp/{}", hostname));
+    let mount_dir_name = format!("/tmp/{}", hostname);
+    let netns_dir_name = format!("{}/netns", mount_dir_name);
+    let lib_dir_name = format!("{}/lib", mount_dir_name);
+
+    let netns_mount = PathBuf::from(netns_dir_name);
+    let lib_mount = PathBuf::from(lib_dir_name);
+
+
     create_directory(&netns_mount)?;
     let netns_dir = PathBuf::from(NETNS);
     // It's not mount(2) that I need to use
     if let Err(e) = bind_mount_namespace(&netns_mount, &netns_dir) {
+        log::error!("Can not remount network namespace inside the container: {:?}", e);
+        return Err(Errcode::NamespacesError(format!("Can not remount network namespace inside the container: {:?}", e)));
+    }
+
+    create_directory(&lib_mount);
+    let lib_dir = PathBuf::from(VAR_LIB);
+    if let Err(e) = bind_mount_namespace(&lib_mount, &lib_dir) {
         log::error!("Can not remount network namespace inside the container: {:?}", e);
         return Err(Errcode::NamespacesError(format!("Can not remount network namespace inside the container: {:?}", e)));
     }
