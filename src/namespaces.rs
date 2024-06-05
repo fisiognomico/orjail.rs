@@ -246,7 +246,7 @@ async fn net_conf(ns_name: &String, veth_ip: &str, veth_2_ip: &str) -> Result<()
         .spawn()?;
     //
     let mut route_process = std::process::Command::new("ip")
-        .args(["route", "add", "default", "dev", veth_2.as_str(), "via", veth_ip])
+        .args(["route", "add", "default", "via", veth_ip, "dev", veth_2.as_str()])
         .stdout(std::process::Stdio::null())
         .spawn()?;
 
