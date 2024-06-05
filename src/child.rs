@@ -5,6 +5,7 @@ use crate::hostname::set_container_hostname;
 use crate::mountpoint::remount_root;
 use crate::namespaces::{mount_netns, userns};
 use crate::net::{prepare_net, slirp};
+use crate::nftables::test_apply_ruleset;
 use crate::syscalls::setsyscalls;
 
 use nix::unistd::{fork, ForkResult, Pid, close, execve};
@@ -98,6 +99,9 @@ fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode>
     // setcapabilities()?;
     // TODO namespace configuration and clean!
     // setsyscalls()?;
+    // TODO all this should be configurable
+    test_apply_ruleset();
+
     Ok(())
 }
 
