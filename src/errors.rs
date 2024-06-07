@@ -29,6 +29,8 @@ pub enum Errcode{
     SocketError(String),
     #[error("Unable to define container syscalls: {0}")]
     SyscallsError(u8),
+    #[error("Error with tor instance {0}")]
+    TorError(String),
 }
 
 impl Errcode{

@@ -3,7 +3,6 @@ VirtualAddrNetwork 10.40.0.0/16
 AutomapHostsOnResolve 1
 TransPort 10.40.50.10:9050
 DNSPort 10.40.50.10:5353
-SOCKSPort 9040 # Default: Bind to localhost:9050 for local connections.
 
 ## Uncomment this to start the process in the background... or use
 ## --runasdaemon 1 on the command line. This is ignored on Windows;

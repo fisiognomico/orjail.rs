@@ -12,6 +12,7 @@ mod net;
 mod nftables;
 mod resources;
 mod syscalls;
+mod tor;
 mod utils;
 
 use errors::exit_with_retcode;
