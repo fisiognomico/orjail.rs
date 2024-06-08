@@ -33,7 +33,7 @@ pub fn run_slirp(child_pid: Pid) -> Result<Pid, Errcode> {
     }
 }
 
-pub fn generate_child_process(config: ContainerOpts) -> Result<Pid, Errcode> {
+pub fn generate_child_process(config: &mut ContainerOpts) -> Result<Pid, Errcode> {
     let mut tmp_stack: [u8; STACK_SIZE] = [0; STACK_SIZE];
     let mut flags = CloneFlags::empty();
     flags.insert(CloneFlags::CLONE_NEWNS);
@@ -48,7 +48,7 @@ pub fn generate_child_process(config: ContainerOpts) -> Result<Pid, Errcode> {
     // NULL as the child stack.
     unsafe {
         match clone(
-            Box::new(|| child(config.clone())),
+            Box::new(|| child(config)),
             &mut tmp_stack,
             flags,
             Some(Signal::SIGCHLD as i32)
@@ -59,8 +59,8 @@ pub fn generate_child_process(config: ContainerOpts) -> Result<Pid, Errcode> {
     }
 }
 
-fn child(config: ContainerOpts) -> isize {
-    match setup_container_configurations(&config) {
+fn child(config: &mut ContainerOpts) -> isize {
+    match setup_container_configurations(config) {
         Ok(()) => log::info!("Container setup successfully!"),
         Err(e) => {
             log::error!("Error while configuring container: {:?}", e);
@@ -80,7 +80,7 @@ fn child(config: ContainerOpts) -> isize {
     retcode
 }
 
-fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode> {
+fn setup_container_configurations(config: &mut ContainerOpts) -> Result<(), Errcode> {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     set_container_hostname(&config.hostname)?;
     // TODO by looking at the rnetlink implementation maybe we do not need this step
@@ -101,6 +101,9 @@ fn setup_container_configurations(config: &ContainerOpts) -> Result<(), Errcode>
     // setsyscalls()?;
     // TODO all this should be configurable
     test_apply_ruleset();
+
+    // Last step run TOR from the container
+    config.spawn_tor();
 
     Ok(())
 }

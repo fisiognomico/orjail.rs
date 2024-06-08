@@ -5,17 +5,18 @@ use std::fs::File;
 use std::io::Write;
 use std::ops::Drop;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use which::which;
 
 pub struct TorProcess {
-    subnet: String,
     process: Child,
 }
 
+pub type TorWrapper = Arc<Mutex<TorProcess>>;
 
 impl TorProcess {
-    pub fn new(data_directory: &Path, pid: u32, subnet: String) -> Result<TorProcess, Errcode> {
+    pub fn new(data_directory: &Path) -> Result<TorProcess, Errcode> {
 
         let tor_bin_path = which("tor").unwrap();
         if data_directory.is_relative() {
@@ -35,11 +36,12 @@ impl TorProcess {
                             AutomapHostsOnResolve 1\n
                             TransPort 10.40.50.10:9050\n
                             DNSPort 10.40.50.10:5353\n
+                            SocksPort 9040\n
                             RunAsDaemon 1\n
                             DataDirectory /var/lib/tor\n";
 
         // Write torrc to file 
-        let torrc = tor_bin_path.join("torrc");
+        let torrc = data_directory.join("torrc");
         if !torrc.exists() {
             let mut default_torrc = File::create(&torrc).unwrap();
             default_torrc.write_all(torrc_contents.as_bytes()).unwrap();
@@ -51,13 +53,10 @@ impl TorProcess {
             .stdin(Stdio::null())
             .arg("-f")
             .arg(torrc)
-            .arg("__OwningControllerProcess")
-            .arg(pid.to_string())
             .spawn()
             .unwrap();
 
         Ok(  TorProcess {
-            subnet,
             process,
         })
     }

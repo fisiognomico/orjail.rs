@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::os::unix::io::{AsRawFd, OwnedFd};
 
 pub struct Container{
-    config: ContainerOpts,
+    pub config: ContainerOpts,
     //sockets: (OwnedFd, OwnedFd),
     pub child: Option<Pid>,
     pub slirp: Option<Pid>,
@@ -65,7 +65,7 @@ impl Container {
         }
 
     pub fn create(&mut self) -> Result<(), Errcode> {
-        let pid = generate_child_process(self.config.clone())?;
+        let pid = generate_child_process(&mut self.config)?;
         self.child = Some(pid);
 
         log::debug!("Creation finished, PID: {:?} ", self.child.unwrap());
@@ -113,7 +113,7 @@ pub fn start(args: Args) -> Result<(), Errcode> {
         return Err(e);
     }
     log::debug!("Container child PID: {:?}", container.child.unwrap());
-    container.run_slirp();
+    container.run_slirp().unwrap();
 
     wait_child(container.child)?;
     log::debug!("Finished, cleaning & exit");

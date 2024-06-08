@@ -1,11 +1,14 @@
 use crate::errors::Errcode;
 use crate::ipc::generate_socketpair;
 use crate::hostname::generate_hostname;
+use crate::tor::{TorProcess, TorWrapper};
 
 use std::os::unix::io::RawFd;
 use std::ffi::CString;
 use std::path::PathBuf;
 use std::os::unix::io::{AsRawFd, OwnedFd};
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub struct ContainerOpts{
@@ -18,6 +21,7 @@ pub struct ContainerOpts{
     pub mount_dir:  PathBuf,
     pub hostname: String,
     pub addpaths: Vec<(PathBuf, PathBuf)>,
+    pub tor_process: Option<TorWrapper>,
 }
 
 impl ContainerOpts{
@@ -38,6 +42,14 @@ impl ContainerOpts{
                     mount_dir,
                     hostname: generate_hostname()?,
                     addpaths,
+                    tor_process: None,
         })
     }
+
+    pub fn spawn_tor(&mut self) {
+        // TODO it should be in the configuration
+        let tor_path = Path::new("/tmp/tor");
+        self.tor_process = Some(Arc::new(Mutex::new(TorProcess::new(tor_path).unwrap())));
+    }
+
 }
