@@ -1,8 +1,10 @@
 use crate::errors::Errcode;
 use crate::ipc::generate_socketpair;
 use crate::hostname::generate_hostname;
+use crate::slirp::{SlirpProcess, SlirpWrapper};
 use crate::tor::{TorProcess, TorWrapper};
 
+use nix::unistd::Pid;
 use std::os::unix::io::RawFd;
 use std::ffi::CString;
 use std::path::PathBuf;
@@ -21,6 +23,7 @@ pub struct ContainerOpts{
     pub mount_dir:  PathBuf,
     pub hostname: String,
     pub addpaths: Vec<(PathBuf, PathBuf)>,
+    pub slirp_process: Option<SlirpWrapper>,
     pub tor_process: Option<TorWrapper>,
 }
 
@@ -42,8 +45,13 @@ impl ContainerOpts{
                     mount_dir,
                     hostname: generate_hostname()?,
                     addpaths,
+                    slirp_process: None,
                     tor_process: None,
         })
+    }
+
+    pub fn spawn_slirp(&mut self, pid: Pid) {
+        self.slirp_process = Some(Arc::new(Mutex::new(SlirpProcess::new(pid).unwrap())));
     }
 
     pub fn spawn_tor(&mut self) {

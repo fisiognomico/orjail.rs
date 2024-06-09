@@ -25,6 +25,8 @@ pub enum Errcode{
     NotSupported(u8),
     #[error("Not possible to define cgroups: {0}")]
     ResourcesError(u8),
+    #[error("Error in Slirp Process creation: {0}")]
+    SlirpError(String),
     #[error("Error in IPC socket communication: {0}")]
     SocketError(String),
     #[error("Unable to define container syscalls: {0}")]

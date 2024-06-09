@@ -4,7 +4,7 @@ use crate::errors::Errcode;
 use crate::hostname::set_container_hostname;
 use crate::mountpoint::remount_root;
 use crate::namespaces::{mount_netns, userns};
-use crate::net::{prepare_net, slirp};
+use crate::net::prepare_net;
 use crate::nftables::test_apply_ruleset;
 use crate::syscalls::setsyscalls;
 
@@ -15,23 +15,6 @@ use nix::sched::CloneFlags;
 use std::ffi::CString;
 
 const STACK_SIZE: usize = 1024 * 1024;
-
-pub fn run_slirp(child_pid: Pid) -> Result<Pid, Errcode> {
-    let mut tmp_stack: [u8; STACK_SIZE] = [0; STACK_SIZE];
-    let mut flags = CloneFlags::empty();
-
-    unsafe {
-        match clone(
-            Box::new(|| slirp(child_pid.clone())),
-            &mut tmp_stack,
-            flags,
-            Some(Signal::SIGCHLD as i32)
-            ) {
-            Ok(pid) => Ok(pid),
-            Err(_) => Err(Errcode::ChildProcessError(0)),
-        }
-    }
-}
 
 pub fn generate_child_process(config: &mut ContainerOpts) -> Result<Pid, Errcode> {
     let mut tmp_stack: [u8; STACK_SIZE] = [0; STACK_SIZE];

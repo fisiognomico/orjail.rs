@@ -11,6 +11,7 @@ mod namespaces;
 mod net;
 mod nftables;
 mod resources;
+mod slirp;
 mod syscalls;
 mod tor;
 mod utils;

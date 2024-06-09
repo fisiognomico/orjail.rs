@@ -1,10 +1,9 @@
 use crate::cli::Args;
 use crate::errors::Errcode;
 use crate::config::ContainerOpts;
-use crate::child::{generate_child_process, run_slirp};
+use crate::child::generate_child_process;
 use crate::ipc::recv_u32;
 use crate::mountpoint::clean_mounts;
-use crate::net::slirp;
 use crate::resources::clean_cgroups;
 
 use scan_fmt::scan_fmt;
@@ -22,7 +21,6 @@ pub struct Container{
     pub config: ContainerOpts,
     //sockets: (OwnedFd, OwnedFd),
     pub child: Option<Pid>,
-    pub slirp: Option<Pid>,
 }
 
 impl Container {
@@ -60,7 +58,6 @@ impl Container {
         Ok(Container {
             config,
             child: None,
-            slirp: None,
             })
         }
 
@@ -72,25 +69,10 @@ impl Container {
         Ok(())
     }
 
-    pub fn run_slirp(&mut self) -> Result<(), Errcode> {
-        let child_pid = self.child.unwrap();
-        let mut slirp_pid = run_slirp(child_pid).unwrap();
-        // TODO we should not harcode this
-        // The problem is that child returns the PID of the forked thread
-        // and of course not the one the process that it executes
-        slirp_pid = Pid::from_raw(slirp_pid.as_raw() + 1);
-        self.slirp = Some(slirp_pid);
-        log::debug!("[+] Saved SLIRP PID: {}", self.slirp.unwrap());
-
-        log::debug!("slirp PID: {:?} ", self.slirp.unwrap());
-        Ok(())
-    }
-
     pub fn clean_exit(&mut self) -> Result<(), Errcode>{
         log::debug!("Cleaning container");
 
         // Here we can not catch errors as its not returned
-        let _ = kill(self.slirp.expect("No slirp process has been spawned!"), SIGKILL);
 
         clean_mounts(&self.config.mount_dir)?;
 
@@ -103,7 +85,6 @@ impl Container {
 
 }
 
-// #[tokio::main]
 pub fn start(args: Args) -> Result<(), Errcode> {
     check_linux_version()?;
     let mut container = Container::new(args)?;
@@ -113,7 +94,7 @@ pub fn start(args: Args) -> Result<(), Errcode> {
         return Err(e);
     }
     log::debug!("Container child PID: {:?}", container.child.unwrap());
-    container.run_slirp().unwrap();
+    container.config.spawn_slirp(container.child.unwrap());
 
     wait_child(container.child)?;
     log::debug!("Finished, cleaning & exit");

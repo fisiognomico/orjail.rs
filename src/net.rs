@@ -4,24 +4,11 @@ use crate::namespaces::{open_namespace, run_in_namespace};
 use crate::utils::generate_random_str;
 
 use futures::TryStreamExt;
-use nix::unistd::Pid;
 use rtnetlink::{new_connection, AddressHandle, Handle};
 use std::net::{IpAddr, Ipv4Addr};
-use std::process::{Command, Stdio};
 use std::str::FromStr;
 
 static NETNS: &str = "/var/run/netns/";
-
-pub fn slirp(pid: Pid) -> isize {
-    let pid_str = format!("{}", pid.as_raw());
-    // TODO catch error when spawning slirp4netns
-    let slirp_process = Command::new("slirp4netns")
-                    .args(["--configure", "--mtu=65520", "--disable-host-loopback", &pid_str, "tap0"])
-                    .stdout(Stdio::null())
-                    .spawn();
-    slirp_process.unwrap().id() as isize
-
-}
 
 pub async fn prepare_net(ns_name: String, veth_ip: &str, veth_2_ip: &str, subnet: u8) -> Result<(u32, u32), Errcode> {
     let (connection, handle, _) = new_connection()?;
