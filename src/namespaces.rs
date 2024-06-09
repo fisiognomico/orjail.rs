@@ -183,7 +183,7 @@ fn run_parent(child: Pid) -> Result<(), Errcode> {
 }
 
 async fn run_child(ns_name: &String, veth_ip: &str, veth_2_ip: &str) -> Result<(), Errcode> {
-    let res = split_namespace(ns_name, veth_ip, veth_2_ip).await;
+    let res = conf_netns_ifaces(ns_name, veth_ip, veth_2_ip).await;
 
     match res {
         Err(_) => {
@@ -197,7 +197,17 @@ async fn run_child(ns_name: &String, veth_ip: &str, veth_2_ip: &str) -> Result<(
     }
 }
 
-async fn split_namespace(ns_name: &String, veth_ip: &str, veth_2_ip: &str) -> Result<(), Errcode> {
+
+async fn conf_netns_ifaces(ns_name: &String, veth_ip: &str, veth_2_ip: &str) -> Result<(), Errcode> {
+    split_namespace(ns_name)?;
+    net_conf(ns_name, veth_ip, veth_2_ip).await?;
+    // ISSUE Unfortunately configuring the interfaces properly inside
+    // a network namespace with rtnetlink results in a deadlock
+    // set_lo_up().await?;
+    Ok(())
+}
+
+pub fn split_namespace(ns_name: &String) -> Result<(), Errcode> {
     // Open NS path
     let ns_path = format!("{}{}", NETNS, ns_name);
 
@@ -252,13 +262,10 @@ async fn split_namespace(ns_name: &String, veth_ip: &str, veth_2_ip: &str) -> Re
     }
 
     // call net_conf
-    net_conf(ns_name, veth_ip, veth_2_ip).await?;
-    // ISSUE Unfortunately configuring the interfaces properly inside
-    // a network namespace with rtnetlink results in a deadlock
-    // set_lo_up().await?;
 
     Ok(())
 }
+
 
 // TODO need to open an issue to rtnetlink to find the proper way to configure an interface inside
 // the created network namespace

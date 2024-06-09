@@ -86,3 +86,8 @@ pub fn exit_with_retcode(res: Result<(), Errcode>) {
         }
     }
 }
+
+pub fn exit_with_errcode(res: Errcode) {
+    log::error!("Exiting for error {res}");
+    exit(res.get_retcode());
+}

@@ -1,9 +1,9 @@
 use crate::capabilities::setcapabilities;
 use crate::config::ContainerOpts;
-use crate::errors::Errcode;
+use crate::errors::{Errcode, exit_with_errcode};
 use crate::hostname::set_container_hostname;
 use crate::mountpoint::remount_root;
-use crate::namespaces::{mount_netns, userns};
+use crate::namespaces::{mount_netns, split_namespace, userns};
 use crate::net::prepare_net;
 use crate::nftables::test_apply_ruleset;
 use crate::syscalls::setsyscalls;
@@ -53,6 +53,11 @@ fn child(config: &mut ContainerOpts) -> isize {
 
     // TODO clean socket conf
     log::info!("Starting container with command: {} and args: {:?}", config.path.to_str().unwrap(), config.argv);
+    // Switch to target network namespace afteer the configuration is done
+    if let Err(e) = split_namespace(&config.namespace) {
+        exit_with_errcode(e);
+    }
+
     let retcode = match execve::<CString, CString>(&config.path, &config.argv, &[]) {
         Ok(_) => 0,
         Err(e) => {
