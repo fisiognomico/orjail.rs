@@ -2,12 +2,13 @@ use crate::errors::Errcode;
 use crate::mountpoint::{bind_mount_namespace, create_directory, mount_directory, unmount_path};
 // use crate::net::set_veth_up;
 
+use nix::errno::Errno;
 use nix::fcntl::{open, OFlag};
 use nix::mount::{mount, MsFlags};
 use nix::sched::{CloneFlags, unshare, setns};
 use nix::unistd::{fork, ForkResult, Pid};
 use nix::sys::wait::{waitpid, WaitStatus};
-use nix::sys::stat::Mode;
+use nix::sys::stat::{stat, Mode};
 use nix::sys::statvfs::{statvfs, FsFlags};
 use rtnetlink::{new_connection, NetworkNamespace};
 use futures::TryStreamExt;
@@ -21,6 +22,7 @@ use std::os::unix::io::{FromRawFd ,RawFd};
 // to create its namespace.
 const UID_COUNT: u64 = 1;
 const GID_COUNT: u64 = 1;
+static RUN: &str = "/run/";
 static NETNS: &str = "/run/netns/";
 static VAR_LIB: &str = "/var/lib";
 
@@ -87,12 +89,33 @@ pub fn mount_netns(hostname: &String) -> Result<(), Errcode> {
     create_directory(&netns_mount)?;
     let netns_dir = PathBuf::from(NETNS);
     // It's not mount(2) that I need to use
-    if let Err(e) = bind_mount_namespace(&netns_mount, &netns_dir) {
-        log::error!("Can not remount network namespace inside the container: {:?}", e);
-        return Err(Errcode::NamespacesError(format!("Can not remount network namespace inside the container: {:?}", e)));
+    // First check if netns exists in run
+    match stat(&netns_dir) {
+        Ok(_stat) => {
+            if let Err(e) = bind_mount_namespace(&netns_mount, &netns_dir) {
+                log::error!("Can not remount network namespace inside the container: {:?}", e);
+                return Err(Errcode::NamespacesError(format!("Can not remount network namespace inside the container: {:?}", e)));
+            }
+        }
+
+        // If /run/netns does not exist bind mount only /run and create it
+        Err(Errno::ENOENT) => {
+            let run_path = PathBuf::from(RUN);
+            if let Err(e) = bind_mount_namespace(&netns_mount, &run_path) {
+                log::error!("Can not remount network namespace inside the container: {:?}", e);
+                return Err(Errcode::NamespacesError(format!("Can not remount network namespace inside the container: {:?}", e)));
+            }
+            create_directory(&netns_mount)?;
+        }
+
+        // What else can go wrong?
+        Err(e) => {
+            log::error!("Unknown error during stat of {}: {}", NETNS, e);
+            return Err(Errcode::NamespacesError(format!("Error stat of {}: {}", NETNS, e)));
+        }
     }
 
-    create_directory(&lib_mount);
+    create_directory(&lib_mount)?;
     let lib_dir = PathBuf::from(VAR_LIB);
     if let Err(e) = bind_mount_namespace(&lib_mount, &lib_dir) {
         log::error!("Can not remount network namespace inside the container: {:?}", e);
@@ -167,10 +190,6 @@ async fn run_child(ns_name: &String, veth_ip: &str, veth_2_ip: &str) -> Result<(
             log::error!("Child process crashed");
             std::process::abort()
         }
-        // Ok(Err(err)) => {
-        //     log::error!("Child process failed");
-        //     exit(1);
-        // }
         Ok(()) => {
             log::debug!("Child exited normally");
             exit(0)

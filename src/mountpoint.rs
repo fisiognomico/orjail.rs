@@ -135,7 +135,7 @@ pub fn bind_mount_namespace(from_path: &PathBuf, to_path: &PathBuf) -> Result<()
     // This function mimicks the behaviour of mount --bind dir1 dir2
     let from_fd = open_tree(CWD, from_path, OpenTreeFlags::OPEN_TREE_CLONE | OpenTreeFlags::OPEN_TREE_CLOEXEC);
     if from_fd.is_err() {
-        log::error!("Cannot open target path {}: {:?}", from_path.to_str().unwrap(), from_fd.unwrap());
+        log::error!("Cannot open target path {}: {:?}", from_path.to_str().unwrap(), from_fd);
         return Err(Errcode::MountsError(8));
     }
 
