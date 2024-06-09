@@ -54,6 +54,7 @@ impl Container {
             real_uid,
             real_gid,
             args.mount_dir,
+            args.namespace,
             addpaths)?;
         Ok(Container {
             config,

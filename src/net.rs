@@ -10,14 +10,13 @@ use std::str::FromStr;
 
 static NETNS: &str = "/var/run/netns/";
 
-pub async fn prepare_net(ns_name: String, veth_ip: &str, veth_2_ip: &str, subnet: u8) -> Result<(u32, u32), Errcode> {
+pub async fn prepare_net(ns_name: &String, veth_ip: &str, veth_2_ip: &str, subnet: u8) -> Result<(u32, u32), Errcode> {
     let (connection, handle, _) = new_connection()?;
     tokio::spawn(connection);
 
     let ns_fd = open_namespace(&ns_name).await?;
 
     let (veth_idx, veth_2_idx) = create_veth_pair(&ns_name, veth_ip, veth_2_ip, subnet).await?;
-
 
     // moved to namespace crate
     join_veth_to_ns_fd(veth_2_idx, ns_fd).await?;

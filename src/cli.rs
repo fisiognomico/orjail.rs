@@ -31,6 +31,10 @@ pub struct Args {
     /// Directory to mount as root of the container
     #[structopt(parse(from_os_str), short = "m", long = "mount")]
     pub mount_dir: PathBuf,
+
+    /// Name of the newtork namespace to create
+    #[structopt(default_value = "test", short = "n", long = "namespace")]
+    pub namespace: String
 }
 
 pub fn parse_args() -> Result<Args, Errcode> {
