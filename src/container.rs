@@ -7,7 +7,7 @@ use crate::mountpoint::clean_mounts;
 use crate::resources::clean_cgroups;
 
 use scan_fmt::scan_fmt;
-use nix::sys::signal::{kill, SIGKILL};
+use nix::sys::stat::stat;
 use nix::sys::utsname::uname;
 use nix::sys::wait::waitpid;
 use nix::unistd::{getuid, getgid, close, Pid};
@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::os::unix::io::{AsRawFd, OwnedFd};
+use which::which;
 
 pub struct Container{
     pub config: ContainerOpts,
@@ -48,6 +49,9 @@ impl Container {
             _        => args.real_uid,
         };
 
+        let tor_path = check_binary(&args.tor, "tor")?;
+        let slirp_path = check_binary(&args.slirp4netns, "slirp4netns")?;
+
         let config = ContainerOpts::new(
             args.command,
             args.uid,
@@ -55,7 +59,9 @@ impl Container {
             real_gid,
             args.mount_dir,
             args.namespace,
-            addpaths)?;
+            addpaths,
+            tor_path,
+            slirp_path)?;
         Ok(Container {
             config,
             child: None,
@@ -108,7 +114,7 @@ pub fn wait_child(pid: Option<Pid>) -> Result<(), Errcode> {
         log::debug!("Waiting for child (pid {}) to finish", child_pid);
         if let Err(e) = waitpid(child_pid, None) {
             log::error!("Error while waiting for child to finish: {:?}", e);
-            return Err(Errcode::ContainerError(1));
+            return Err(Errcode::ContainerError(format!("Error while waiting for child to finish: {:?}", e)));
         }
     }
     Ok(())
@@ -125,7 +131,7 @@ pub fn check_linux_version() -> Result<(), Errcode> {
             return Err(Errcode::NotSupported(0));
         }
     } else {
-        return Err(Errcode::ContainerError(0));
+        return Err(Errcode::ContainerError("Can not parse kernel release version".to_string()));
     }
 
     if host.unwrap().machine() != "x86_64" {
@@ -133,4 +139,25 @@ pub fn check_linux_version() -> Result<(), Errcode> {
     }
 
     Ok(())
+}
+
+fn check_binary(arg: &String, name: &str) -> Result<PathBuf, Errcode> {
+    let path: PathBuf;
+    if arg.is_empty() {
+        let path =  match which(name) {
+            Ok(path) => return Ok(path),
+            Err(e) => {
+                log::error!("Can not find {} in PATH, please be sure that is available or install it", name);
+                return Err(Errcode::ContainerError(format!("Can not find {} in PATH: {}", name, e)));
+            }
+        };
+    } else {
+        let path = PathBuf::from(name);
+        if let Err(e) = stat(&path) {
+            log::error!("Can not stat {} at {}: {}", name, arg, e);
+            return Err(Errcode::ContainerError(format!("Can not find {} at path {}: {}", name, arg, e)));
+        } else {
+            return Ok(path);
+        }
+    }
 }

@@ -1,6 +1,7 @@
 use crate::errors::Errcode;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
 use nix::unistd::Pid;
 
 pub struct SlirpProcess {
@@ -11,10 +12,10 @@ pub type SlirpWrapper = Arc<Mutex<SlirpProcess>>;
 
 impl SlirpProcess {
     // TODO continue from here to copy tor impl.
-    pub fn new(pid: Pid) -> Result<SlirpProcess, Errcode> {
+    pub fn new(pid: Pid, slirp_path: &PathBuf) -> Result<SlirpProcess, Errcode> {
         let pid_str = format!("{}", pid.as_raw());
         // TODO catch error when spawning slirp4netns
-        let slirp_process = Command::new("slirp4netns")
+        let slirp_process = Command::new(slirp_path.as_os_str())
                         .args(["--configure", "--mtu=65520", "--disable-host-loopback", &pid_str, "tap0"])
                         .stdout(Stdio::null())
                         .spawn();

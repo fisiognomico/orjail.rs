@@ -4,10 +4,8 @@ use std::process::{Child, Command, Stdio};
 use std::fs::File;
 use std::io::Write;
 use std::ops::Drop;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-
-use which::which;
 
 pub struct TorProcess {
     process: Child,
@@ -16,9 +14,8 @@ pub struct TorProcess {
 pub type TorWrapper = Arc<Mutex<TorProcess>>;
 
 impl TorProcess {
-    pub fn new(data_directory: &Path) -> Result<TorProcess, Errcode> {
+    pub fn new(data_directory: &Path, tor_bin_path: &PathBuf) -> Result<TorProcess, Errcode> {
 
-        let tor_bin_path = which("tor").unwrap();
         if data_directory.is_relative() {
             return Err(Errcode::TorError(format!("Data directory not absolute: {:?}", data_directory)));
         }

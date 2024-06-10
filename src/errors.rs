@@ -10,7 +10,7 @@ pub enum Errcode{
     #[error("Error in setting capabilities {0}")]
     Capabilities(u8),
     #[error("Error in container creation {0}")]
-    ContainerError(u8),
+    ContainerError(String),
     #[error("Error in child creation {0}")]
     ChildProcessError(u8),
     #[error("Error while setting hostname {0}")]

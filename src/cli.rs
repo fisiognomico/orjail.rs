@@ -33,8 +33,16 @@ pub struct Args {
     pub mount_dir: PathBuf,
 
     /// Name of the newtork namespace to create
-    #[structopt(default_value = "test", short = "n", long = "namespace")]
-    pub namespace: String
+    #[structopt(default_value = "test", short, long)]
+    pub namespace: String,
+
+    /// Set custom TOR binary
+    #[structopt(default_value = "", short, long)]
+    pub tor: String,
+
+    /// Set custom slirp4netns binary
+    #[structopt(default_value = "", short, long)]
+    pub slirp4netns: String
 }
 
 pub fn parse_args() -> Result<Args, Errcode> {
