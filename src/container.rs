@@ -2,7 +2,6 @@ use crate::cli::Args;
 use crate::errors::Errcode;
 use crate::config::ContainerOpts;
 use crate::child::generate_child_process;
-use crate::ipc::recv_u32;
 use crate::mountpoint::clean_mounts;
 use crate::resources::clean_cgroups;
 
@@ -10,13 +9,13 @@ use scan_fmt::scan_fmt;
 use nix::sys::stat::stat;
 use nix::sys::utsname::uname;
 use nix::sys::wait::waitpid;
-use nix::unistd::{getuid, getgid, close, Pid};
-use std::os::unix::io::RawFd;
+use nix::unistd::{getuid, getgid, Pid};
+use std::fs::File;
+use std::io::Read;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use std::sync::Arc;
-use std::os::unix::io::{AsRawFd, OwnedFd};
 use which::which;
+
+const PROCFS_UNPRIVILEGED_NS: &str = "/proc/sys/kernel/unprivileged_userns_clone";
 
 pub struct Container{
     pub config: ContainerOpts,
@@ -93,7 +92,8 @@ impl Container {
 }
 
 pub fn start(args: Args) -> Result<(), Errcode> {
-    check_linux_version()?;
+    check_compatibility()?;
+
     let mut container = Container::new(args)?;
     if let Err(e) = container.create(){
         container.clean_exit()?;
@@ -122,7 +122,7 @@ pub fn wait_child(pid: Option<Pid>) -> Result<(), Errcode> {
 
 pub const MINIMAL_KERNEL_VERSION: f32 = 4.8;
 
-pub fn check_linux_version() -> Result<(), Errcode> {
+pub fn check_compatibility() -> Result<(), Errcode> {
     let host = uname();
     log::debug!("Linux release: {}", host.unwrap().release().to_str().unwrap());
 
@@ -138,13 +138,31 @@ pub fn check_linux_version() -> Result<(), Errcode> {
         return Err(Errcode::NotSupported(1));
     }
 
-    Ok(())
+    // Check that unprivileged namespaces are enabled
+    let mut ns_fh = File::open(PROCFS_UNPRIVILEGED_NS)?;
+    let mut byte_buf = vec![0; 2];
+    ns_fh.read(&mut byte_buf)?;
+
+    match byte_buf[0] {
+        b'1' => Ok(()),
+        b'0' => {
+            log::error!("Unprivileged namespaces are not supported!");
+            log::error!("Please check the value of {}, and set it to 1", PROCFS_UNPRIVILEGED_NS);
+            log::error!("For example on Debian you can run as root: sysctl kernel.unprivileged_userns_clone=1");
+            Err(Errcode::ContainerError("Unprivileged namespaces disabled".to_string()))
+        }
+        _ => {
+            log::error!("Unexpected value read from {}", PROCFS_UNPRIVILEGED_NS);
+            Err(Errcode::ContainerError("Unprivileged namespaces disabled".to_string()))
+        }
+    }
+
+
 }
 
 fn check_binary(arg: &String, name: &str) -> Result<PathBuf, Errcode> {
-    let path: PathBuf;
     if arg.is_empty() {
-        let path =  match which(name) {
+        match which(name) {
             Ok(path) => return Ok(path),
             Err(e) => {
                 log::error!("Can not find {} in PATH, please be sure that is available or install it", name);
@@ -152,7 +170,7 @@ fn check_binary(arg: &String, name: &str) -> Result<PathBuf, Errcode> {
             }
         };
     } else {
-        let path = PathBuf::from(name);
+        let path = PathBuf::from(arg);
         if let Err(e) = stat(&path) {
             log::error!("Can not stat {} at {}: {}", name, arg, e);
             return Err(Errcode::ContainerError(format!("Can not find {} at path {}: {}", name, arg, e)));
