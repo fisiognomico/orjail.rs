@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use rlimit::{setrlimit, Resource};
 use cgroups_rs::cgroup_builder::CgroupBuilder;
 use cgroups_rs::hierarchies::V2;

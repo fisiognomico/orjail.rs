@@ -23,8 +23,7 @@ impl TorProcess {
         if !data_directory.exists() {
             std::fs::create_dir_all(data_directory).map_err(|e| {
                 log::error!("Can not create tor data directory: {e}");
-                // return Err(Errcode::TorError("porocido".to_string()));
-            });
+            }).unwrap();
         } else if data_directory.is_file() {
             return Err(Errcode::TorError(format!("Tor data dir {:?} exists as file", data_directory)));
         }
@@ -44,7 +43,7 @@ impl TorProcess {
             default_torrc.write_all(torrc_contents.as_bytes()).unwrap();
         }
 
-        let mut process = Command::new(tor_bin_path.as_os_str())
+        let process = Command::new(tor_bin_path.as_os_str())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .stdin(Stdio::null())

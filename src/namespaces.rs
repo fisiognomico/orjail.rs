@@ -1,5 +1,5 @@
 use crate::errors::Errcode;
-use crate::mountpoint::{bind_mount_namespace, create_directory, mount_directory, unmount_path};
+use crate::mountpoint::{bind_mount_namespace, create_directory, mount_directory};
 // use crate::net::set_veth_up;
 
 use nix::errno::Errno;
@@ -269,24 +269,27 @@ pub fn split_namespace(ns_name: &String) -> Result<(), Errcode> {
 
 // TODO need to open an issue to rtnetlink to find the proper way to configure an interface inside
 // the created network namespace
+// UPDATE Unfortunately it seems that the issue is not due to rtnetlink per se, but in an
+// unexpected behaviour that emerges when an unshare is done after a tokio runtime has been spawned
+// This would require to reimplement this block using the netlink API directly.
 async fn net_conf(ns_name: &String, veth_ip: &str, veth_2_ip: &str) -> Result<(), Errcode> {
-    let mut lo_process = std::process::Command::new("ip")
+    let _lo_process = std::process::Command::new("ip")
         .args(["link", "set", "lo", "up"])
         .stdout(std::process::Stdio::null())
         .spawn()?;
     let veth_2 = format!("{}_peer", ns_name);
-    let mut up_process = std::process::Command::new("ip")
+    let _up_process = std::process::Command::new("ip")
         .args(["link", "set", veth_2.as_str(), "up"])
         .stdout(std::process::Stdio::null())
         .spawn()?;
     // set_veth_up().await?;
     let addr_subnet = format!("{}/24", veth_2_ip);
-    let mut addr_process = std::process::Command::new("ip")
+    let _addr_process = std::process::Command::new("ip")
         .args(["addr", "add", addr_subnet.as_str(), "dev", veth_2.as_str()])
         .stdout(std::process::Stdio::null())
         .spawn()?;
     //
-    let mut route_process = std::process::Command::new("ip")
+    let _route_process = std::process::Command::new("ip")
         .args(["route", "add", "default", "via", veth_ip, "dev", veth_2.as_str()])
         .stdout(std::process::Stdio::null())
         .spawn()?;
@@ -297,11 +300,12 @@ async fn net_conf(ns_name: &String, veth_ip: &str, veth_2_ip: &str) -> Result<()
 
 // TODO Unfortunately it seems that using rtnetlink inside the forked process that has been moved
 // to the target network namespace hangs undefinitively.
+#[allow(dead_code)]
 async fn set_veth_up() -> Result<(), Errcode> {
-    let (connection, handle, _) = new_connection()?;
+    let (_connection, handle, _) = new_connection()?;
     let mut links = handle.link().get().execute();
     'outer: while let Some(msg) = links.try_next().await? {
-        for nla in msg.attributes.into_iter() {
+        for _nla in msg.attributes.into_iter() {
             log::debug!("found link {}", msg.header.index);
             continue 'outer;
         }
@@ -316,13 +320,12 @@ async fn set_veth_up() -> Result<(), Errcode> {
      Ok(())
 }
 
+#[allow(dead_code)]
 async fn set_lo_up() -> Result<(), Errcode> {
-    let (connection, handle, _) = new_connection()?;
-    log::debug!("ARE WE STOPPING YET???");
+    let (_connection, handle, _) = new_connection()?;
     let veth_idx = handle.link().get().match_name("lo".to_string()).execute().try_next().await?
                 .ok_or_else(|| Errcode::NetworkError(format!("Can not find lo interface ")))?
                 .header.index;
-    log::debug!("LO INTERFACE INDEX: {}", veth_idx);
     handle.link().set(veth_idx).up().execute().await
          .map_err(|e| {Errcode::NetworkError(format!("Can not set lo interface up: {}", e))
      })?;

@@ -1,4 +1,3 @@
-use std::fmt;
 use std::process::exit;
 use thiserror::Error;
 
@@ -59,18 +58,6 @@ impl From<std::net::AddrParseError> for Errcode {
         Errcode::NetworkError(err.to_string())
     }
 }
-
-#[allow(unreachable_patterns)]
-// impl fmt::Display for Errcode {
-// 
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         // Define what behaviour for each variant of the enum
-//         match &self{
-//             _ => write!(f, "{:?}", self) // For any variant not previously covered
-//         }
-//     }
-// }
-
 
 pub fn exit_with_retcode(res: Result<(), Errcode>) {
     match res {

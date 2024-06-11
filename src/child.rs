@@ -8,7 +8,7 @@ use crate::net::prepare_net;
 use crate::nftables::test_apply_ruleset;
 use crate::syscalls::setsyscalls;
 
-use nix::unistd::{fork, ForkResult, Pid, close, execve};
+use nix::unistd::{Pid, execve};
 use nix::sched::clone;
 use nix::sys::signal::Signal;
 use nix::sched::CloneFlags;

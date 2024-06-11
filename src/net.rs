@@ -1,7 +1,6 @@
+#![allow(dead_code)]
 use crate::errors::Errcode;
-use crate::ipc::send_u32;
 use crate::namespaces::{open_namespace, run_in_namespace};
-use crate::utils::generate_random_str;
 
 use futures::TryStreamExt;
 use rtnetlink::{new_connection, AddressHandle, Handle};
@@ -11,7 +10,7 @@ use std::str::FromStr;
 static NETNS: &str = "/var/run/netns/";
 
 pub async fn prepare_net(ns_name: &String, veth_ip: &str, veth_2_ip: &str, subnet: u8) -> Result<(u32, u32), Errcode> {
-    let (connection, handle, _) = new_connection()?;
+    let (connection, _handle, _) = new_connection()?;
     tokio::spawn(connection);
 
     let ns_fd = open_namespace(&ns_name).await?;
@@ -21,8 +20,7 @@ pub async fn prepare_net(ns_name: &String, veth_ip: &str, veth_2_ip: &str, subne
     // moved to namespace crate
     join_veth_to_ns_fd(veth_2_idx, ns_fd).await?;
     run_in_namespace(&ns_name, veth_ip, veth_2_ip).await?;
-    // Try to set lo up in namespace
-    // set_lo_up(ns_name).await?;
+    // Try to set lo up in namespace set_lo_up(ns_name).await?;
     Ok((veth_idx, veth_2_idx))
 }
 
@@ -54,13 +52,13 @@ async fn create_bridge(name: String, bridge_ip: &str, subnet: u8) -> Result<u32,
     AddressHandle::new(handle.clone()).add(bridge_idx, bridge_addr, subnet).execute().await
         .map_err(|e| {
             Errcode::NetworkError(format!("Can not add ip {} to bridge {}: {}", bridge_ip, name, e))
-        });
+        })?;
 
     // Set bridge up
     handle.link().set(bridge_idx).up().execute().await
         .map_err(|e| {
             Errcode::NetworkError(format!("Can not set bridge {} up: {}", name, e))
-        });
+        })?;
 
     Ok(bridge_idx)
 }
@@ -89,25 +87,25 @@ async fn create_veth_pair(veth_name: &String, veth_addr: &str, veth2_addr: &str,
     handle.link().set(veth_idx).up().execute().await
         .map_err(|e| {
             Errcode::NetworkError(format!("Setting veth {} up failed: {}", veth, e));
-    });
+    }).unwrap();
 
     let veth_ip_addr = IpAddr::V4(Ipv4Addr::from_str(veth_addr)?);
     AddressHandle::new(handle.clone()).add(veth_idx, veth_ip_addr, subnet).execute().await
         .map_err(|e| {
             Errcode::NetworkError(format!("Setting addr {} to veth {} failed: {}", veth_addr, veth, e));
-    });
+    }).unwrap();
 
     let veth2_ip_addr = IpAddr::V4(Ipv4Addr::from_str(veth2_addr)?);
     AddressHandle::new(handle.clone()).add(veth_2_idx, veth2_ip_addr, subnet).execute().await
         .map_err(|e| {
             Errcode::NetworkError(format!("Setting addr {} to veth {} failed: {}", veth2_addr, veth_2, e));
-    });
+    }).unwrap();
 
     // set interface veth2 up
     handle.link().set(veth_2_idx).up().execute().await
         .map_err(|e| {
             Errcode::NetworkError(format!("Setting veth with idx {} up failed: {}", veth_idx, e));
-    });
+    }).unwrap();
 
     // set lo interface up
     // TODO move to another function called in the namespace
@@ -149,7 +147,7 @@ pub async fn join_veth_to_ns_fd(veth_idx: u32, fd: i32) -> Result<(), Errcode> {
 
 // TODO continue configure address interface definition
 pub async fn setup_veth_peer(veth_idx: u32, ns_ip: &String, subnet: u8) -> Result<(), Errcode> {
-    let (connection, handle, _) = new_connection()?;
+    let (_connection, handle, _) = new_connection()?;
 
     let veth2_addr = IpAddr::V4(Ipv4Addr::from_str(ns_ip)?);
 
@@ -157,13 +155,13 @@ pub async fn setup_veth_peer(veth_idx: u32, ns_ip: &String, subnet: u8) -> Resul
     AddressHandle::new(handle.clone()).add(veth_idx, veth2_addr, subnet).execute().await
         .map_err(|e| {
             Errcode::NetworkError(format!("Setting addr {} to veth with index {} failed: {}", ns_ip, veth_idx, e));
-    });
+    }).unwrap();
 
     // set interface veth2 up
     handle.link().set(veth_idx).up().execute().await
         .map_err(|e| {
             Errcode::NetworkError(format!("Setting veth with idx {} up failed: {}", veth_idx, e));
-    });
+    }).unwrap();
 
     // set lo interface up
     let lo_idx = handle.link().get().match_name("lo".to_string()).execute().try_next().await?
@@ -172,7 +170,7 @@ pub async fn setup_veth_peer(veth_idx: u32, ns_ip: &String, subnet: u8) -> Resul
 
     handle.link().set(lo_idx).up().execute().await
         .map_err(|e| {Errcode::NetworkError(format!("Can not set lo interface up: {}", e))
-    });
+    }).unwrap();
 
     Ok(())
 }

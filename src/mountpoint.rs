@@ -10,7 +10,8 @@ use std::fs::{create_dir_all, remove_dir};
 use nix::mount::{mount, MsFlags, umount2, MntFlags};
 use nix::unistd::{pivot_root, chdir};
 
-// TODO clean as it does not work and is not needed
+// TODO what was the issue with this function?
+#[allow(dead_code)]
 pub fn set_container_mountpoint(mount_dir: &PathBuf, addpaths: &Vec<(PathBuf, PathBuf)>) -> Result<(), Errcode> {
     log::debug!("setting mount points");
     // Setting the mount flags
@@ -124,7 +125,8 @@ pub fn delete_dir(path: &PathBuf) -> Result<(), Errcode> {
     }
 }
 
-pub fn clean_mounts(rootpath: &PathBuf) -> Result<(), Errcode> {
+// TODO also the clean should be checked again
+pub fn clean_mounts(_rootpath: &PathBuf) -> Result<(), Errcode> {
     // TODO complete this function, in order to do it we need to keep track
     // of the random suffix of the root mountpoint
     // unmount_path(&rootpath);

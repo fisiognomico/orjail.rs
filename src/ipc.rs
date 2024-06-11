@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::errors::Errcode;
 
 use std::os::unix::io::{AsRawFd, OwnedFd};
