@@ -3,7 +3,7 @@ use crate::errors::Errcode;
 use crate::config::ContainerOpts;
 use crate::child::generate_child_process;
 use crate::mountpoint::clean_mounts;
-use crate::resources::clean_cgroups;
+// use crate::resources::{clean_cgroups, restrict_resources};
 
 use scan_fmt::scan_fmt;
 use nix::sys::stat::stat;
@@ -19,7 +19,6 @@ const PROCFS_UNPRIVILEGED_NS: &str = "/proc/sys/kernel/unprivileged_userns_clone
 
 pub struct Container{
     pub config: ContainerOpts,
-    //sockets: (OwnedFd, OwnedFd),
     pub child: Option<Pid>,
 }
 
@@ -69,6 +68,8 @@ impl Container {
 
     pub fn create(&mut self) -> Result<(), Errcode> {
         let pid = generate_child_process(&mut self.config)?;
+        // TODO investigate why cgroup constraints result in a deadlock
+        // restrict_resources(&self.config.hostname, pid)?;
         self.child = Some(pid);
 
         log::debug!("Creation finished, PID: {:?} ", self.child.unwrap());
@@ -82,10 +83,10 @@ impl Container {
 
         clean_mounts(&self.config.mount_dir)?;
 
-        if let Err(e) = clean_cgroups(&self.config.hostname) {
-            log::error!("Cgroups cleaning failed: {}", e);
-            return Err(e);
-        }
+        // if let Err(e) = clean_cgroups(&self.config.hostname) {
+        //     log::error!("Cgroups cleaning failed: {}", e);
+        //     return Err(e);
+        // }
         Ok(())
     }
 
@@ -100,6 +101,8 @@ pub fn start(args: Args) -> Result<(), Errcode> {
         log::error!("Error while creating container: {:?}", e);
         return Err(e);
     }
+    // Set container cgroup constraints
+
     log::debug!("Container child PID: {:?}", container.child.unwrap());
     container.config.spawn_slirp(container.child.unwrap());
 

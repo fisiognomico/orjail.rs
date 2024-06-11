@@ -1,5 +1,4 @@
 use crate::errors::Errcode;
-use crate::ipc::generate_socketpair;
 use crate::hostname::generate_hostname;
 use crate::slirp::{SlirpProcess, SlirpWrapper};
 use crate::tor::{TorProcess, TorWrapper};
@@ -33,9 +32,6 @@ impl ContainerOpts{
         let argv: Vec<CString> = command.split_ascii_whitespace()
             .map(|s| CString::new(s).expect("Cannot read arg")).collect();
         let path = argv[0].clone();
-
-        // TODO clean socket conf
-        let sockets = generate_socketpair()?;
 
         Ok( ContainerOpts {
                     path,
