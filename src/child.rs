@@ -84,11 +84,14 @@ fn setup_container_configurations(config: &mut ContainerOpts) -> Result<(), Errc
     // TODO maybe change name to the network namespace and make these parameters configurable
     let (veth_idx, veth_2_idx) = rt.block_on(
         prepare_net(&config.namespace, "10.40.50.10", "10.40.50.20", 24)).expect("Failed to prepare network");
-    // setcapabilities()?;
     // TODO namespace configuration and clean!
-    // setsyscalls()?;
     // TODO all this should be configurable
     test_apply_ruleset();
+   
+    // Last step drop capabilities and limit syscalls
+    setcapabilities()?;
+    // setsyscalls()?;
+
 
     // Last step run TOR from the container
     config.spawn_tor();
