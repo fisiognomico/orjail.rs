@@ -90,7 +90,7 @@ impl Container {
 
         // Here we can not catch errors as its not returned
 
-        clean_mounts(&self.config.mount_dir)?;
+        clean_mounts(&self.config.mount_dir, &self.config.hostname)?;
 
         // if let Err(e) = clean_cgroups(&self.config.hostname) {
         //     log::error!("Cgroups cleaning failed: {}", e);

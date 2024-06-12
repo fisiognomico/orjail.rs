@@ -6,7 +6,7 @@ use rustix::fd::AsFd;
 use rustix::fs::CWD;
 use rustix::mount::{open_tree, move_mount, OpenTreeFlags, MoveMountFlags};
 use std::path::PathBuf;
-use std::fs::{create_dir_all, remove_dir};
+use std::fs::{create_dir_all, remove_dir, remove_dir_all};
 use nix::mount::{mount, MsFlags, umount2, MntFlags};
 use nix::unistd::{pivot_root, chdir};
 
@@ -126,7 +126,12 @@ pub fn delete_dir(path: &PathBuf) -> Result<(), Errcode> {
 }
 
 // TODO also the clean should be checked again
-pub fn clean_mounts(mount_root: &Option<PathBuf>) -> Result<(), Errcode> {
+pub fn clean_mounts(mount_root: &Option<PathBuf>, hostname: &String) -> Result<(), Errcode> {
+    let tmp_path = PathBuf::from(format!("/tmp/{}", hostname));
+    if let Err(e) = remove_dir_all(&tmp_path) {
+        log::error!("Can not clean {}: {}", tmp_path.to_str().unwrap(), e);
+        return Err(Errcode::MountsError(2));
+    };
     // TODO complete this function, in order to do it we need to keep track
     // of the random suffix of the root mountpoint
     match mount_root {
