@@ -140,14 +140,14 @@ pub fn check_compatibility() -> Result<(), Errcode> {
 
     if let Ok(version) = scan_fmt!(host.unwrap().release().to_str().unwrap(), "{f}.{}", f32) {
         if version < MINIMAL_KERNEL_VERSION {
-            return Err(Errcode::NotSupported(0));
+            return Err(Errcode::NotSupported(format!("Kernel Version {version} not supported, minimum {MINIMAL_KERNEL_VERSION}")));
         }
     } else {
         return Err(Errcode::ContainerError("Can not parse kernel release version".to_string()));
     }
 
     if host.unwrap().machine() != "x86_64" {
-        return Err(Errcode::NotSupported(1));
+        return Err(Errcode::NotSupported(format!("Machine architecture {:?} not supported", host.unwrap().machine())));
     }
 
     // Check that unprivileged namespaces are enabled
@@ -161,7 +161,7 @@ pub fn check_compatibility() -> Result<(), Errcode> {
             log::error!("Unprivileged namespaces are not supported!");
             log::error!("Please check the value of {}, and set it to 1", PROCFS_UNPRIVILEGED_NS);
             log::error!("For example on Debian you can run as root: sysctl kernel.unprivileged_userns_clone=1");
-            Err(Errcode::ContainerError("Unprivileged namespaces disabled".to_string()))
+            Err(Errcode::NotSupported("Unprivileged namespaces disabled".to_string()))
         }
         _ => {
             log::error!("Unexpected value read from {}", PROCFS_UNPRIVILEGED_NS);

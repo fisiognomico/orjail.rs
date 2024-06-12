@@ -37,7 +37,7 @@ pub fn generate_child_process(config: &mut ContainerOpts) -> Result<Pid, Errcode
             Some(Signal::SIGCHLD as i32)
             ) {
             Ok(pid) => Ok(pid),
-            Err(_) => Err(Errcode::ChildProcessError(0)),
+            Err(e) => Err(Errcode::ChildProcessError(format!("Error while trying to spawn child thread with clone: {e}"))),
         }
     }
 }

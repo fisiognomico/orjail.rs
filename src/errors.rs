@@ -11,9 +11,9 @@ pub enum Errcode{
     #[error("Error in container creation {0}")]
     ContainerError(String),
     #[error("Error in child creation {0}")]
-    ChildProcessError(u8),
+    ChildProcessError(String),
     #[error("Error while setting hostname {0}")]
-    HostnameError(u8),
+    HostnameError(String),
     #[error("Error while mounting container fs {0}")]
     MountsError(String),
     #[error("Error in namespace creation {0}")]
@@ -21,7 +21,7 @@ pub enum Errcode{
     #[error("Error in network creation: {0}")]
     NetworkError(String),
     #[error("Functionality not supported")]
-    NotSupported(u8),
+    NotSupported(String),
     #[error("Not possible to define cgroups: {0}")]
     ResourcesError(String),
     #[error("Error in Slirp Process creation: {0}")]
