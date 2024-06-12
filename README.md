@@ -46,14 +46,19 @@ in `target/debug/orjailrs`, in case you want to launch it manually.
 > ```
 > **-d --debug**
 > Set log level to debug
+>
 > **-b --bubblewrap**
 > Spawn using bubblewrap
+>
 > **-u --uid**
 > User id to spawn inside the container
+>
 > **-t --tor**
 > Tor executable path
+>
 > **-s --slirp4netns**
 > slirp4netns executable path
+>
 > **-n --namespace**
 > Set the name of the network namespace
 
