@@ -13,16 +13,16 @@ pub struct Args {
     #[structopt(short, long)]
     pub command: String,
 
-    /// User ID to create inside the container
+    /// User ID to create inside the container, default to 0
     #[structopt(default_value = "0", short = "u", long = "uid")]
     pub uid: u32,
 
-    /// User ID to map inside the container
-    #[structopt(default_value = "4294967295", long = "real-uid")]
+    /// User ID to map inside the container, default to $UID
+    #[structopt(skip)]
     pub real_uid: u32,
 
-    /// Group ID to map inside the container
-    #[structopt(default_value = "4294967295", long = "real-gid")]
+    /// Group ID to map inside the container, default to $GID
+    #[structopt(skip)]
     pub real_gid: u32,
 
     #[structopt(parse(from_os_str), short = "a", long = "add")]

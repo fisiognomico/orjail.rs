@@ -38,12 +38,12 @@ impl Container {
 
         // match default value for uid/gid
         let real_uid = match args.real_uid {
-            u32::MAX => getuid().as_raw(),
+            0 => getuid().as_raw(),
             _        => args.real_uid,
         };
 
         let real_gid = match args.real_gid {
-            u32::MAX => getgid().as_raw(),
+            0 => getgid().as_raw(),
             _        => args.real_uid,
         };
 
