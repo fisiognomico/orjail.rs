@@ -89,8 +89,13 @@ fn setup_container_configurations(config: &mut ContainerOpts) -> Result<(), Errc
     test_apply_ruleset();
 
     // Last step drop capabilities and limit syscalls
-    setcapabilities()?;
-    setsyscalls()?;
+    if !config.disable_capabilities {
+        setcapabilities()?;
+    }
+
+    if !config.disable_syscall {
+        setsyscalls()?;
+    }
 
 
     // Last step run TOR from the container

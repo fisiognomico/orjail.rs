@@ -50,16 +50,25 @@ impl Container {
         let tor_path = check_binary(&args.tor, "tor")?;
         let slirp_path = check_binary(&args.slirp4netns, "slirp4netns")?;
 
+        let mount_dir;
+        if args.mount_dir.is_empty() {
+            mount_dir = None;
+        } else {
+            mount_dir = Some(PathBuf::from(args.mount_dir));
+        }
+
         let config = ContainerOpts::new(
             args.command,
             args.uid,
             real_uid,
             real_gid,
-            args.mount_dir,
+            mount_dir,
             args.namespace,
             addpaths,
             tor_path,
-            slirp_path)?;
+            slirp_path,
+            args.disable_syscall,
+            args.disable_capabilities)?;
         Ok(Container {
             config,
             child: None,

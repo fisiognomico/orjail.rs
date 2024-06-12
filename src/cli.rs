@@ -3,7 +3,7 @@ use structopt::StructOpt;
 use crate::errors::Errcode;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "crabcan", about = "A simple container in Rust.")]
+#[structopt(name = "orjail", about = "Container runtime that strictly forces traffic through TOR.")]
 pub struct Args {
     /// Activate debug mode
     #[structopt(short, long)]
@@ -29,8 +29,8 @@ pub struct Args {
     pub addpaths: Vec<PathBuf>,
 
     /// Directory to mount as root of the container
-    #[structopt(parse(from_os_str), short = "m", long = "mount")]
-    pub mount_dir: PathBuf,
+    #[structopt(default_value = "", short = "m", long = "mount")]
+    pub mount_dir: String,
 
     /// Name of the newtork namespace to create
     #[structopt(default_value = "test", short, long)]
@@ -42,7 +42,15 @@ pub struct Args {
 
     /// Set custom slirp4netns binary
     #[structopt(default_value = "", short, long)]
-    pub slirp4netns: String
+    pub slirp4netns: String,
+
+    /// Disable syscall filtering
+    #[structopt(long)]
+    pub disable_syscall: bool,
+
+    /// Disable capabilities drop
+    #[structopt(long)]
+    pub disable_capabilities: bool
 }
 
 pub fn parse_args() -> Result<Args, Errcode> {
@@ -57,9 +65,10 @@ pub fn parse_args() -> Result<Args, Errcode> {
     }
 
     // Validate arguments
-    if !args.mount_dir.exists() || !args.mount_dir.is_dir(){
-        return Err(Errcode::ArgumentInvalid("mount"));
-    }
+    // TODO this will be performed after a recheck of set_container_mountpoint
+    // if !args.mount_dir.exists() || !args.mount_dir.is_dir(){
+    //     return Err(Errcode::ArgumentInvalid("mount"));
+    // }
 
     if args.command.is_empty() {
         return Err(Errcode::ArgumentInvalid("command"));

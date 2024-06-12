@@ -126,11 +126,13 @@ pub fn delete_dir(path: &PathBuf) -> Result<(), Errcode> {
 }
 
 // TODO also the clean should be checked again
-pub fn clean_mounts(_rootpath: &PathBuf) -> Result<(), Errcode> {
+pub fn clean_mounts(mount_root: &Option<PathBuf>) -> Result<(), Errcode> {
     // TODO complete this function, in order to do it we need to keep track
     // of the random suffix of the root mountpoint
-    // unmount_path(&rootpath);
-    Ok(())
+    match mount_root {
+        Some(rootpath) => unmount_path(rootpath),
+        None => Ok(()),
+    }
 }
 
 pub fn bind_mount_namespace(from_path: &PathBuf, to_path: &PathBuf) -> Result<(), Errcode>  {

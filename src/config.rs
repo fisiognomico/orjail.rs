@@ -17,7 +17,7 @@ pub struct ContainerOpts{
     pub uid:        u32,
     pub real_uid:   u32,
     pub real_gid:   u32,
-    pub mount_dir:  PathBuf,
+    pub mount_dir:  Option<PathBuf>,
     pub hostname: String,
     pub namespace: String,
     pub addpaths: Vec<(PathBuf, PathBuf)>,
@@ -25,10 +25,12 @@ pub struct ContainerOpts{
     pub slirp_process: Option<SlirpWrapper>,
     pub tor_path: PathBuf,
     pub tor_process: Option<TorWrapper>,
+    pub disable_syscall: bool,
+    pub disable_capabilities: bool,
 }
 
 impl ContainerOpts{
-    pub fn new(command: String, uid: u32, real_uid: u32, real_gid: u32, mount_dir: PathBuf, namespace: String, addpaths: Vec<(PathBuf, PathBuf)>, tor_path: PathBuf, slirp_path: PathBuf) -> Result<ContainerOpts, Errcode> {
+    pub fn new(command: String, uid: u32, real_uid: u32, real_gid: u32, mount_dir: Option<PathBuf>, namespace: String, addpaths: Vec<(PathBuf, PathBuf)>, tor_path: PathBuf, slirp_path: PathBuf, disable_syscall: bool, disable_capabilities: bool) -> Result<ContainerOpts, Errcode> {
         let argv: Vec<CString> = command.split_ascii_whitespace()
             .map(|s| CString::new(s).expect("Cannot read arg")).collect();
         let path = argv[0].clone();
@@ -47,6 +49,8 @@ impl ContainerOpts{
                     slirp_process: None,
                     tor_path,
                     tor_process: None,
+                    disable_syscall,
+                    disable_capabilities,
         })
     }
 
