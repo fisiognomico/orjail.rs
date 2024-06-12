@@ -26,11 +26,13 @@ const CAPABILITIES_DROP: [Cap; 21] = [
 
 pub fn setcapabilities() -> Result<(), Errcode> {
     log::debug!("Clearing unwanted capabilities");
-    if let Ok(mut caps) = FullCapState::get_current() {
-        caps.bounding.drop_all(CAPABILITIES_DROP.iter().map(|&cap| cap));
-        caps.inheritable.drop_all(CAPABILITIES_DROP.iter().map(|&cap| cap));
-        Ok(())
-    } else {
-        Err(Errcode::Capabilities(0))
+    // if let Ok(mut caps) = FullCapState::get_current() {
+    match FullCapState::get_current() {
+        Ok(mut caps) => {
+            caps.bounding.drop_all(CAPABILITIES_DROP.iter().map(|&cap| cap));
+            caps.inheritable.drop_all(CAPABILITIES_DROP.iter().map(|&cap| cap));
+            Ok(())
+        },
+        Err(e) => Err(Errcode::Capabilities(format!("Error while trying to get an handler to thread capabilities: {e}"))),
     }
 }

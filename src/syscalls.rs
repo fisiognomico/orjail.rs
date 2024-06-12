@@ -46,13 +46,13 @@ pub fn setsyscalls() -> Result<(), Errcode> {
             refuse_if_comp(&mut ctx, *ind, sc, *biteq)?;
         }
 
-        if let Err(_) = ctx.load() {
-            return Err(Errcode::SyscallsError(0));
+        if let Err(e) = ctx.load() {
+            return Err(Errcode::SyscallsError(format!("Error during syscall filter context load: {e}")));
         }
 
         Ok(())
     } else {
-        Err(Errcode::SyscallsError(1))
+        Err(Errcode::SyscallsError("Error during syscall filter context init".to_string()))
     }
 }
 
@@ -60,7 +60,7 @@ const EPERM: u16 = 1;
 fn refuse_syscall(ctx: &mut Context, sc: &Syscall) -> Result<(), Errcode>{
     match ctx.set_action_for_syscall(Action::Errno(EPERM), *sc){
         Ok(_) => Ok(()),
-        Err(_) => Err(Errcode::SyscallsError(2)),
+        Err(e) => Err(Errcode::SyscallsError(format!("Set action EPERM for syscall {} returned error {}", sc.into_i32(), e))),
     }
 }
 
@@ -68,6 +68,6 @@ fn refuse_if_comp(ctx: &mut Context, ind: u32, sc: &Syscall, biteq: u64)-> Resul
     match ctx.set_rule_for_syscall(Action::Errno(EPERM), *sc,
             &[Comparator::new(ind, Cmp::MaskedEq, biteq, Some(biteq))]){
         Ok(_) => Ok(()),
-        Err(_) => Err(Errcode::SyscallsError(3)),
+        Err(e) => Err(Errcode::SyscallsError(format!("Syscall comparator returned error {} for syscall {}", e, sc.into_i32()))),
     }
 }

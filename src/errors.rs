@@ -7,7 +7,7 @@ pub enum Errcode{
     #[error("argument {0} is not valid")]
     ArgumentInvalid(&'static str),
     #[error("Error in setting capabilities {0}")]
-    Capabilities(u8),
+    Capabilities(String),
     #[error("Error in container creation {0}")]
     ContainerError(String),
     #[error("Error in child creation {0}")]
@@ -23,13 +23,13 @@ pub enum Errcode{
     #[error("Functionality not supported")]
     NotSupported(u8),
     #[error("Not possible to define cgroups: {0}")]
-    ResourcesError(u8),
+    ResourcesError(String),
     #[error("Error in Slirp Process creation: {0}")]
     SlirpError(String),
     #[error("Error in IPC socket communication: {0}")]
     SocketError(String),
     #[error("Unable to define container syscalls: {0}")]
-    SyscallsError(u8),
+    SyscallsError(String),
     #[error("Error with tor instance {0}")]
     TorError(String),
 }

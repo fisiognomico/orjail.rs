@@ -30,13 +30,13 @@ pub fn restrict_resources(hostname: &String, pid: Pid) -> Result<(), Errcode>{
         .build(Box::new(V2::new()));
     // We apply the cgroups rules to the child process we just created
     let pid : u64 = pid.as_raw().try_into().unwrap();
-    if let Err(_) = cgs.add_task(CgroupPid::from(pid)) {
-        return Err(Errcode::ResourcesError(0));
+    if let Err(e) = cgs.add_task(CgroupPid::from(pid)) {
+        return Err(Errcode::ResourcesError(format!("Error during cgroups conf for PID {pid}: {e}")));
     };
     // Rlimit
     // Can create only 64 file descriptors
-    if let Err(_) = setrlimit(Resource::NOFILE, NOFILE_RLIMIT, NOFILE_RLIMIT){
-        return Err(Errcode::ResourcesError(0));
+    if let Err(e) = setrlimit(Resource::NOFILE, NOFILE_RLIMIT, NOFILE_RLIMIT){
+        return Err(Errcode::ResourcesError(format!("Cgroups: setrlimit returned error {e}")));
     }
     Ok(())
 }
@@ -45,13 +45,13 @@ pub fn clean_cgroups(hostname: &String) -> Result<(), Errcode>{
     log::debug!("Cleaning cgroups");
     match canonicalize(format!("/sys/fs/cgroup/{}/", hostname)){
         Ok(d) => {
-            if let Err(_) = remove_dir(d) {
-                return Err(Errcode::ResourcesError(2));
+            if let Err(e) = remove_dir(&d) {
+                return Err(Errcode::ResourcesError(format!("Error while trying to delete dir {}: {}", d.to_str().unwrap(), e)));
             }
         },
         Err(e) => {
             log::error!("Error while canonicalize path: {}", e);
-            return Err(Errcode::ResourcesError(3));
+            return Err(Errcode::ResourcesError(format!("Error while canonicalize path: {}", e)));
         }
     }
     Ok(())
