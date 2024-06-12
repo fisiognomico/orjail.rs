@@ -46,8 +46,9 @@ pub fn set_container_mountpoint(mount_dir: &PathBuf, addpaths: &Vec<(PathBuf, Pa
     let old_root = new_root.join(PathBuf::from(old_root_name.clone()));
     create_directory(&old_root)?;
     log::debug!("Pivoting root to {}", old_root.as_path().to_str().unwrap());
-    if let Err(_) = pivot_root(&new_root, &old_root) {
-        return Err(Errcode::MountsError(4));
+    if let Err(e) = pivot_root(&new_root, &old_root) {
+        return Err(Errcode::MountsError(format!("Can not change root mount point from {} to {} : {}",
+                    old_root.to_str().unwrap(), new_root.to_str().unwrap(), e)));
     }
 
     // Now we unmount the old root, and we also take care of being out of
@@ -55,7 +56,7 @@ pub fn set_container_mountpoint(mount_dir: &PathBuf, addpaths: &Vec<(PathBuf, Pa
     let root_inside_container = PathBuf::from(format!("/{}", old_root_name));
     if let Err(e) = chdir(&PathBuf::from("/")) {
         log::error!("Cannot change cwd to root: {}", e);
-        return Err(Errcode::MountsError(5));
+        return Err(Errcode::MountsError(format!("Cannot change cwd to root: {}", e)));
     }
     unmount_path(&root_inside_container)?;
     delete_dir(&root_inside_container)?;
@@ -83,13 +84,10 @@ pub fn mount_directory(path: Option<&PathBuf>, mount_point: &PathBuf, flags: Vec
         Ok(_) => Ok(()),
         Err(e) => {
             if let Some(p) = path {
-                log::error!("Cannot mount {} to {}: {}",
-                p.to_str().unwrap(), mount_point.to_str().unwrap(), e);
+                Err(Errcode::MountsError(format!("Cannot mount {} to {}: {}", p.to_str().unwrap(), mount_point.to_str().unwrap(), e)))
             } else {
-                log::error!("Cannot remount {}: {}",
-                mount_point.to_str().unwrap(), e);
+                Err(Errcode::MountsError(format!("Cannot remount {}: {}", mount_point.to_str().unwrap(), e)))
             }
-            Err(Errcode::MountsError(3))
         }
     }
 }
@@ -100,7 +98,7 @@ pub fn create_directory(path: &PathBuf) -> Result<(), Errcode> {
         Ok(_) => Ok(()),
         Err(e) => {
             log::error!("Cannot create directory {} : {}", path.to_str().unwrap(), e);
-            Err(Errcode::MountsError(2))
+            Err(Errcode::MountsError(format!("Cannot create directory {} : {}", path.to_str().unwrap(), e)))
         }
     }
 }
@@ -110,7 +108,7 @@ pub fn unmount_path(path: &PathBuf) -> Result<(), Errcode> {
         Ok(_) => Ok(()),
         Err(e) => {
             log::error!("Unable to detach directory {}: {}", path.to_str().unwrap(), e);
-            Err(Errcode::MountsError(1))
+            Err(Errcode::MountsError(format!("Unable to detach directory {}: {}", path.to_str().unwrap(), e)))
         }
     }
 }
@@ -120,17 +118,16 @@ pub fn delete_dir(path: &PathBuf) -> Result<(), Errcode> {
         Ok(_) => Ok(()),
         Err(e) => {
             log::error!("Unable to delete directory {} : {}", path.to_str().unwrap(), e);
-            Err(Errcode::MountsError(1))
+            Err(Errcode::MountsError(format!("Unable to delete directory {} : {}", path.to_str().unwrap(), e)))
         }
     }
 }
 
-// TODO also the clean should be checked again
 pub fn clean_mounts(mount_root: &Option<PathBuf>, hostname: &String) -> Result<(), Errcode> {
     let tmp_path = PathBuf::from(format!("/tmp/{}", hostname));
     if let Err(e) = remove_dir_all(&tmp_path) {
         log::error!("Can not clean {}: {}", tmp_path.to_str().unwrap(), e);
-        return Err(Errcode::MountsError(2));
+        return Err(Errcode::MountsError(format!("Unable to delete tmp dir: {}", e)));
     };
     // TODO complete this function, in order to do it we need to keep track
     // of the random suffix of the root mountpoint
@@ -145,12 +142,12 @@ pub fn bind_mount_namespace(from_path: &PathBuf, to_path: &PathBuf) -> Result<()
     let from_fd = open_tree(CWD, from_path, OpenTreeFlags::OPEN_TREE_CLONE | OpenTreeFlags::OPEN_TREE_CLOEXEC);
     if from_fd.is_err() {
         log::error!("Cannot open target path {}: {:?}", from_path.to_str().unwrap(), from_fd);
-        return Err(Errcode::MountsError(8));
+        return Err(Errcode::MountsError(format!("Cannot open target path {}: {:?}", from_path.to_str().unwrap(), from_fd)));
     }
 
     if let Err(e) = move_mount(from_fd.unwrap().as_fd(), "", CWD, to_path, MoveMountFlags::MOVE_MOUNT_F_EMPTY_PATH) {
         log::error!("Can not mount {} to {}: {:?}", from_path.to_str().unwrap(), to_path.to_str().unwrap(), e);
-        return Err(Errcode::MountsError(9));
+        return Err(Errcode::MountsError(format!("Can not mount {} to {}: {:?}", from_path.to_str().unwrap(), to_path.to_str().unwrap(), e)));
     }
 
     Ok(())

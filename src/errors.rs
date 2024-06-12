@@ -15,7 +15,7 @@ pub enum Errcode{
     #[error("Error while setting hostname {0}")]
     HostnameError(u8),
     #[error("Error while mounting container fs {0}")]
-    MountsError(u8),
+    MountsError(String),
     #[error("Error in namespace creation {0}")]
     NamespacesError(String),
     #[error("Error in network creation: {0}")]
